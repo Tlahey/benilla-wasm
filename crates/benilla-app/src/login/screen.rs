@@ -691,14 +691,11 @@ fn spawn_screen(
         {
             use benilla_formats::locales::locale_label;
             let available = form.locale.codes.contains(&form.locale.selected);
+            let not_detected = crate::web_config::text("login.locale_not_detected");
             let label = format!(
                 "{}{}",
                 locale_label(&form.locale.selected),
-                if available {
-                    ""
-                } else {
-                    crate::web_config::text("login.locale_not_detected")
-                }
+                if available { "" } else { not_detected.as_str() }
             );
             ui.spawn(Node {
                 position_type: PositionType::Absolute,
