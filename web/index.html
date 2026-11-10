@@ -29,8 +29,12 @@
       // Account creation is the stack's separate `accounts` service. An explicit
       // BENILLA_CONFIG.accounts wins; otherwise the same host's 8088 port, where
       // the loopback-only accounts page lives.
+      const accountHost = (() => {
+        const host = location.hostname || 'localhost';
+        return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+      })();
       const accounts = globalThis.BENILLA_CONFIG.accounts
-        || `http://${location.hostname || 'localhost'}:8088/`;
+        || `http://${accountHost}:8088/`;
       globalThis.BENILLA_ENDPOINTS = Object.freeze({
         locale,
         assets: `${localized}/file`,
