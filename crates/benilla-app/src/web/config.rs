@@ -21,28 +21,29 @@ extern "C" {
 pub(crate) fn active_locale() -> String {
     endpoint("locale")
 }
-/// Before the original UI VM exists, use the page's own en/ru startup dictionary.
-pub(crate) fn startup_text(key: &str) -> String {
+/// Browser-owned text, by key, from the JSON i18n service (`web/i18n.js`).
+///
+/// The base is `web/i18n/en_GB.json`; every other locale file must carry exactly
+/// the base keys, and the service rejects the page (throws) when one does not.
+/// `BENILLA_I18N.text` throws on a key the base itself lacks, which is the crash
+/// the strict check exists for — a key added to Rust without a JSON entry errors
+/// at the call, not by silently falling back to English.
+pub(crate) fn text(key: &str) -> String {
     let dictionary = js_sys::Reflect::get(&js_sys::global(), &"BENILLA_I18N".into())
-        .expect("reading startup localization");
+        .expect("reading BENILLA_I18N");
     let function = js_sys::Reflect::get(&dictionary, &"text".into())
-        .expect("reading startup localization text");
+        .expect("reading BENILLA_I18N.text");
     use wasm_bindgen::JsCast;
     function
         .unchecked_into::<js_sys::Function>()
         .call1(&dictionary, &key.into())
-        .expect("formatting startup localization")
+        .expect("formatting i18n text")
         .as_string()
-        .expect("startup localization returns text")
+        .expect("i18n text returns a string")
 }
-/// Browser-owned chrome has no original GlobalStrings keys. Keep its trilingual
-/// wording separate from installed game text and select before the VM exists.
-pub(crate) fn text<'a>(english: &'a str, russian: &'a str, french: &'a str) -> &'a str {
-    match active_locale().as_str() {
-        "ruRU" => russian,
-        "frFR" => french,
-        _ => english,
-    }
+/// Alias kept for the loading screen; the JSON service is what answers now.
+pub(crate) fn startup_text(key: &str) -> String {
+    text(key)
 }
 /// The account-creation page the login screen's button opens, or `None` when the page
 /// was built without one (old config.js) — the button is only spawned when this answers.

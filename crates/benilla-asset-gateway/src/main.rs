@@ -666,6 +666,7 @@ fn content_type(path: &Path) -> &'static str {
         Some("js") => "text/javascript; charset=utf-8",
         Some("wasm") => "application/wasm",
         Some("css") => "text/css; charset=utf-8",
+        Some("json") => "application/json; charset=utf-8",
         Some("png") => "image/png",
         Some("svg") => "image/svg+xml",
         _ => "application/octet-stream",

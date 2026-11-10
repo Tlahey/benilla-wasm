@@ -557,6 +557,42 @@ fn spawn_screen(
                 });
             });
 
+        // **Create Account** — below the Login button (519 top + 45 height + 12 air), centred
+        // with the same 16 px offset as Login. It is the reference's Community act in the slot
+        // nearest where the player already is; clicking opens the stack's accounts page.
+        #[cfg(target_arch = "wasm32")]
+        if crate::web_config::accounts_url().is_some() {
+            let create_account = crate::web_config::text("login.create_account");
+            ui.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    top: px(576.0),
+                    width: Val::Percent(100.0),
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+            ))
+            .with_children(|row| {
+                row.spawn(Node {
+                    margin: UiRect::left(px(16.0)),
+                    ..default()
+                })
+                .with_children(|slot| {
+                    glue_button(
+                        slot,
+                        art,
+                        &font,
+                        LoginAction::CreateAccount,
+                        &create_account,
+                        150.0,
+                        38.0,
+                        GlueBtnKind::Small,
+                        s,
+                    );
+                });
+            });
+        }
+
         // Quit (`GlueButtonSmallTemplate` 150×38 at BOTTOMRIGHT (−5,29)).
         #[cfg(not(target_arch = "wasm32"))]
         ui.spawn((Node {
@@ -661,11 +697,7 @@ fn spawn_screen(
                 if available {
                     ""
                 } else {
-                    crate::web_config::text(
-                        " [not detected]",
-                        " [не найден]",
-                        " [non détecté]",
-                    )
+                    crate::web_config::text("login.locale_not_detected")
                 }
             );
             ui.spawn(Node {
@@ -726,6 +758,7 @@ fn spawn_screen(
                         ));
                         crate::glue::backdrop::backdrop_border(rows, border, 32.0, Color::WHITE);
                     }
+                    let languages = crate::web_config::text("login.languages");
                     outlined_text(
                         rows,
                         Node {
@@ -737,10 +770,7 @@ fn spawn_screen(
                         (),
                         (),
                         GlueText {
-                            text: strings.text(
-                                "LANGUAGES",
-                                crate::web_config::text("Languages", "Языки", "Langues"),
-                            ),
+                            text: strings.text("LANGUAGES", &languages),
                             size: 12.0,
                             color: GOLD,
                             wrap: false,
@@ -764,36 +794,8 @@ fn spawn_screen(
             }
         }
 
-        // **The Community slot** (`AccountLoginCommunityButton` in AccountLogin.xml: 150×38,
-        // BOTTOMLEFT (10,120)) — the reference's button opened the retail site; ours opens the
-        // stack's account-creation page. The geometry is the reference's, which is why the Save
-        // Account checkbox below sits at its authored seat. The button only exists when the
-        // page was configured (`BENILLA_ENDPOINTS.accounts`), so no dead control ships.
         #[cfg(target_arch = "wasm32")]
-        if crate::web_config::accounts_url().is_some() {
-            ui.spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(10.0),
-                    bottom: px(120.0),
-                    ..default()
-                },
-            ))
-            .with_children(|c| {
-                glue_button(
-                    c,
-                    art,
-                    &font,
-                    LoginAction::CreateAccount,
-                    crate::web_config::text("Create Account", "Создать аккаунт", "Créer un compte"),
-                    150.0,
-                    38.0,
-                    GlueBtnKind::Small,
-                    s,
-                );
-            });
-        }
-
+        let remember_password = crate::web_config::text("login.remember_password");
         // The Remember Account Name checkbox (20×20 at the resolved absolute (17, top 653) —
         // the ref anchors it under the Community button we cut; the spot is the same) + its
         // 10 px shadowed gold label at LEFT+24.
@@ -809,11 +811,7 @@ fn spawn_screen(
                 679.0,
                 LoginAction::ToggleSavePassword,
                 form.save_password,
-                crate::web_config::text(
-                    "Remember Password (stored on this browser)",
-                    "Сохранить пароль (в этом браузере)",
-                    "Mémoriser le mot de passe (stocké dans ce navigateur)",
-                ),
+                remember_password.as_str(),
             ),
         ] {
             ui.spawn((Node {

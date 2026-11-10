@@ -16,7 +16,7 @@
     <canvas id="benilla"></canvas>
     <div id="benilla-bootstrap-status" role="status" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./localization.js"></script>
+    <script src="./i18n.js"></script>
     <script type="module">
       const gateway = new URL(globalThis.BENILLA_CONFIG.gateway || location.origin, location.href);
       if (!['http:', 'https:'].includes(gateway.protocol) || gateway.search || gateway.hash || gateway.username || gateway.password) {
@@ -44,8 +44,21 @@
         auth: `${socketBase}/game/v1/auth`,
         world: `${socketBase}/game/v1/world`,
       });
+      // Every locale file is checked against the en_GB base before the client
+      // starts. A missing or unknown key rejects this promise, and the page
+      // shows the service's own error instead of booting half-translated.
+      const status = document.getElementById('benilla-bootstrap-status');
+      try {
+        await globalThis.BENILLA_I18N.ready;
+      } catch (error) {
+        status.hidden = false;
+        status.textContent = `i18n: ${error.message}`;
+        console.error('Benilla i18n failed', error);
+        throw error;
+      }
+      status.hidden = false;
+      status.textContent = globalThis.BENILLA_I18N.text('client_loading');
       import('./pkg-full/benilla.js').then(({ default: init }) => init()).catch(error => {
-        const status = document.getElementById('benilla-bootstrap-status');
         status.hidden = false;
         status.textContent = globalThis.BENILLA_I18N.text('client_failed');
         console.error('Benilla failed to start', error);

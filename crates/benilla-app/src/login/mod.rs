@@ -934,18 +934,10 @@ fn login_input(
                 match crate::web_config::accounts_url() {
                     Some(url) => {
                         if !crate::web_config::open_accounts_page(&url) {
-                            dialog.open_error(crate::web_config::text(
-                                "The account page could not be opened (check popup blocking).",
-                                "Страница создания аккаунта не открылась (проверьте блокировку всплывающих окон).",
-                                "La page de création de compte n'a pas pu s'ouvrir (vérifie le blocage des popups).",
-                            ));
+                            dialog.open_error(&crate::web_config::text("login.account_page_blocked"));
                         }
                     }
-                    None => dialog.open_error(crate::web_config::text(
-                        "Account creation is not configured for this server.",
-                        "Создание аккаунта не настроено для этого сервера.",
-                        "La création de compte n'est pas configurée pour ce serveur.",
-                    )),
+                    None => dialog.open_error(&crate::web_config::text("login.account_not_configured")),
                 }
             }
             LoginAction::ToggleSave => {
@@ -1069,11 +1061,9 @@ fn login_input(
                     benilla_auth_web::AuthSession::create(&form.account.text, &form.password.text)
                 {
                     let message = match error {
-                        benilla_auth_web::SessionError::InvalidPassword => crate::web_config::text(
-                            "Password must contain 1–16 printable ASCII characters (Latin letters, digits or symbols). Please check your keyboard layout.",
-                            "Пароль должен содержать от 1 до 16 печатных ASCII-символов (латинские буквы, цифры или знаки). Проверьте раскладку клавиатуры.",
-                            "Le mot de passe doit contenir 1 à 16 caractères ASCII imprimables (lettres latines, chiffres ou symboles). Vérifiez la disposition de votre clavier.",
-                        ).to_owned(),
+                        benilla_auth_web::SessionError::InvalidPassword => {
+                            crate::web_config::text("login.password_invalid")
+                        }
                         other => other.to_string(),
                     };
                     dialog.open_error(&message);

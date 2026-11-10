@@ -23,12 +23,7 @@ pub(super) fn install(app: &mut App) {
     );
     app.world_mut().resource_mut::<LoginForm>().locale = LocaleChoice {
         selected,
-        status: text(
-            "Detecting locale data...",
-            "Поиск языковых данных…",
-            "Détection des données de langue…",
-        )
-        .into(),
+        status: text("login.detecting_locale_data"),
         ..default()
     };
     app.add_systems(Update, deliver);
@@ -61,21 +56,11 @@ fn deliver(
                 .into_iter()
                 .filter(|code| LOCALE_CODES.contains(&code.as_str()))
                 .collect();
-            form.locale.status = text(
-                "Language changes reload the page.",
-                "Смена языка перезагрузит страницу.",
-                "Changer de langue recharge la page.",
-            )
-            .into();
+            form.locale.status = text("login.language_changes_reload");
         }
         Err(error) => {
             warn!("login: locale catalog unavailable: {error}");
-            form.locale.status = text(
-                "Locale list unavailable; refresh development gateway.",
-                "Список языков недоступен; перезапустите шлюз разработки.",
-                "Liste des langues indisponible ; rechargez la passerelle de développement.",
-            )
-            .into();
+            form.locale.status = text("login.locale_list_unavailable");
         }
     }
     form.locale.revision += 1;
@@ -93,40 +78,20 @@ pub(super) fn select(form: &mut LoginForm, index: usize) {
         Ok(()) => {
             let changed = code != crate::web_config::active_locale();
             form.locale.selected = code;
-            form.locale.status = text(
-                "Language saved.",
-                "Язык сохранён.",
-                "Langue enregistrée.",
-            )
-            .into();
+            form.locale.status = text("login.language_saved");
             if changed {
-                form.locale.status = text(
-                    "Reloading with selected language...",
-                    "Перезагрузка с выбранным языком…",
-                    "Rechargement avec la langue sélectionnée…",
-                )
-                .into();
+                form.locale.status = text("login.reloading_with_selected_language");
                 if let Some(window) = web_sys::window() {
                     if let Err(error) = window.location().reload() {
                         warn!("login: language reload failed: {error:?}");
-                        form.locale.status = text(
-                            "Saved; reload the page to apply language.",
-                            "Сохранено; перезагрузите страницу для смены языка.",
-                            "Enregistré ; rechargez la page pour appliquer la langue.",
-                        )
-                        .into();
+                        form.locale.status = text("login.saved_reload_page");
                     }
                 }
             }
         }
         Err(error) => {
             warn!("login: saving locale preference failed: {error}");
-            form.locale.status = text(
-                "Could not save language preference.",
-                "Не удалось сохранить язык.",
-                "Impossible d'enregistrer la préférence de langue.",
-            )
-            .into();
+            form.locale.status = text("login.save_locale_failed");
         }
     }
     form.locale.open = false;
