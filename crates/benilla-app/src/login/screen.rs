@@ -200,6 +200,10 @@ pub(crate) enum LoginAction {
     /// Open the realmlist editor (decision 1667) — on the button and on the address readout under
     /// it, so clicking the address you want to change does what it looks like it does.
     Realmlist,
+    /// Open the stack's account-creation page — the slot the reference's Community button filled.
+    /// Browser-only, because the page is a web origin (`BENILLA_ENDPOINTS.accounts`).
+    #[cfg(target_arch = "wasm32")]
+    CreateAccount,
 }
 
 /// Root of the login screen (despawned whole on exit); `with_art` mirrors the select screen's
@@ -657,7 +661,11 @@ fn spawn_screen(
                 if available {
                     ""
                 } else {
-                    crate::web_config::text(" [not detected]", " [не найден]")
+                    crate::web_config::text(
+                        " [not detected]",
+                        " [не найден]",
+                        " [non détecté]",
+                    )
                 }
             );
             ui.spawn(Node {
@@ -729,7 +737,10 @@ fn spawn_screen(
                         (),
                         (),
                         GlueText {
-                            text: strings.text("LANGUAGES", "Languages"),
+                            text: strings.text(
+                                "LANGUAGES",
+                                crate::web_config::text("Languages", "Языки", "Langues"),
+                            ),
                             size: 12.0,
                             color: GOLD,
                             wrap: false,
@@ -753,6 +764,36 @@ fn spawn_screen(
             }
         }
 
+        // **The Community slot** (`AccountLoginCommunityButton` in AccountLogin.xml: 150×38,
+        // BOTTOMLEFT (10,120)) — the reference's button opened the retail site; ours opens the
+        // stack's account-creation page. The geometry is the reference's, which is why the Save
+        // Account checkbox below sits at its authored seat. The button only exists when the
+        // page was configured (`BENILLA_ENDPOINTS.accounts`), so no dead control ships.
+        #[cfg(target_arch = "wasm32")]
+        if crate::web_config::accounts_url().is_some() {
+            ui.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(10.0),
+                    bottom: px(120.0),
+                    ..default()
+                },
+            ))
+            .with_children(|c| {
+                glue_button(
+                    c,
+                    art,
+                    &font,
+                    LoginAction::CreateAccount,
+                    crate::web_config::text("Create Account", "Создать аккаунт", "Créer un compte"),
+                    150.0,
+                    38.0,
+                    GlueBtnKind::Small,
+                    s,
+                );
+            });
+        }
+
         // The Remember Account Name checkbox (20×20 at the resolved absolute (17, top 653) —
         // the ref anchors it under the Community button we cut; the spot is the same) + its
         // 10 px shadowed gold label at LEFT+24.
@@ -768,11 +809,11 @@ fn spawn_screen(
                 679.0,
                 LoginAction::ToggleSavePassword,
                 form.save_password,
-                if crate::web_config::active_locale() == "ruRU" {
-                    "Сохранить пароль (в этом браузере)"
-                } else {
-                    "Remember Password (stored on this browser)"
-                },
+                crate::web_config::text(
+                    "Remember Password (stored on this browser)",
+                    "Сохранить пароль (в этом браузере)",
+                    "Mémoriser le mot de passe (stocké dans ce navigateur)",
+                ),
             ),
         ] {
             ui.spawn((Node {

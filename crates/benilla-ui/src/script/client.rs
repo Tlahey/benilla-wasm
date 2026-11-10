@@ -78,6 +78,29 @@ pub(super) fn install(lua: &mut Vm) -> benilla_lua::Result<()> {
     })?;
     lua.register_function("IsMacClient", |_, ()| Ok(Value::Nil))?;
 
+    // `SetEuropeanNumbers([flag])` — the engine's European number-format switch (the flag `%F`
+    // reads to print a decimal comma).
+    //
+    // **The frFR client calls it at VARIABLES_LOADED, and a nil global aborts the whole load.**
+    // The French edition's `Interface\FrameXML\Localization.lua:12` is
+    // `SetEuropeanNumbers(true)` inside `LocalizeFrames`; without this binding the reference's
+    // own `UIParent_OnEvent` (`UIParent.lua:232`) raises "attempt to call global
+    // 'SetEuropeanNumbers' (a nil value)" and never reaches `UpdateNameplates()`. enUS's
+    // `LocalizeFrames` is empty, which is why the gap only shows with a European install.
+    //
+    // The argument is `GetBoolOrDefault`'s (`0x6f1c10`), not Lua truthiness: absent takes the
+    // default `true`, nil is false, a boolean is itself, a number truncates toward zero, and a
+    // string dispatches on its first byte (`"0"`/`"off"` false, `"1"`/`"on"` true, anything
+    // unrecognised the default). The verb pushes no values.
+    lua.register_function("SetEuropeanNumbers", |lua, args: MultiValue| {
+        let flag = super::binding_abi::bool_or_default(args.get(0), true);
+        lua.app_data_ref::<Model>()
+            .expect("model app_data")
+            .european_numbers
+            .set(flag);
+        Ok(())
+    })?;
+
     // **`FrameXML_Debug([v])` — the XML loader's own trace switch, get-or-set** (decision 2160,
     // wow-re `ui/scratch/framexml-debug-trace-flag.md`). `0x488440` reads the global `[0xceea30]`
     // through `0x6edb40`, and:
@@ -434,6 +457,42 @@ mod tests {
         assert!(
             s.eval::<bool>("return IsMacClient() == nil").unwrap(),
             "nil is the PC arm, which is the arm this client wants"
+        );
+    }
+
+    /// `SetEuropeanNumbers([flag])` answers zero values and stores `GetBoolOrDefault`'s reading.
+    ///
+    /// The frFR client's `Localization.lua:12` calls it with `true` from `LocalizeFrames`, and a
+    /// nil global there is exactly the startup error the browser reported ("attempt to call global
+    /// 'SetEuropeanNumbers' (a nil value)"). The default is the engine's `true`, and `nil` is
+    /// false — not Lua truthiness (`"0"` is false, every string is truthy in Lua).
+    #[test]
+    fn set_european_numbers_is_answered_and_reads_get_bool_or_default() {
+        let mut s = UiScript::new().unwrap();
+        assert!(
+            !s.model_ref().european_numbers.get(),
+            "off before the first call"
+        );
+        assert_eq!(
+            s.arity("SetEuropeanNumbers(true)").unwrap(),
+            0,
+            "the verb pushes no values"
+        );
+        s.run("SetEuropeanNumbers(true)").unwrap();
+        assert!(s.model_ref().european_numbers.get());
+        s.run("SetEuropeanNumbers(false)").unwrap();
+        assert!(!s.model_ref().european_numbers.get());
+        s.run("SetEuropeanNumbers(nil)").unwrap();
+        assert!(!s.model_ref().european_numbers.get(), "nil is false, not absent");
+        s.run("SetEuropeanNumbers()").unwrap();
+        assert!(
+            s.model_ref().european_numbers.get(),
+            "absent takes the default true"
+        );
+        s.run(r#"SetEuropeanNumbers("0")"#).unwrap();
+        assert!(
+            !s.model_ref().european_numbers.get(),
+            "the string arm, not Lua truthiness"
         );
     }
 }

@@ -57,6 +57,14 @@ def main():
                 or parsed.query or parsed.fragment):
             raise ValueError("BENILLA_PUBLIC_URL must be an HTTP(S) URL without credentials/query/fragment")
         parsed.port  # Validate port syntax too.
+    accounts_url = os.getenv("BENILLA_ACCOUNTS_URL", "").strip()
+    if accounts_url:
+        parsed = urlsplit(accounts_url)
+        if (parsed.scheme not in ("http", "https") or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.query or parsed.fragment):
+            raise ValueError("BENILLA_ACCOUNTS_URL must be an HTTP(S) URL without credentials/query/fragment")
+        parsed.port  # Validate port syntax too.
 
     upstream = os.getenv("UPSTREAM_HOST") or shared_host or "host.docker.internal"
     auth = override_endpoint(os.getenv("AUTH_UPSTREAM"), upstream, os.getenv("AUTH_PORT", "3724"))
@@ -69,11 +77,16 @@ def main():
             link = root / path.name
             if not link.is_symlink():
                 link.symlink_to(path, target_is_directory=path.is_dir())
-    (root / "config.js").write_text(
-        (source / "config.js").read_text() + "\n// Runtime environment override.\n"
-        + "globalThis.BENILLA_CONFIG.gateway = " + json.dumps(public_url) + ";\n"
+    config = (source / "config.js").read_text() + "\n// Runtime environment override.\n"
+    config += "globalThis.BENILLA_CONFIG.gateway = " + json.dumps(public_url) + ";\n"
+    if accounts_url:
+        config += "globalThis.BENILLA_CONFIG.accounts = " + json.dumps(accounts_url) + ";\n"
+    (root / "config.js").write_text(config)
+    print(
+        f"Benilla: public gateway={public_url or '(page origin)'}, accounts={accounts_url or '(host:8088)'}, "
+        f"auth={auth}, world={world}, Data={data}",
+        flush=True,
     )
-    print(f"Benilla: public gateway={public_url or '(page origin)'}, auth={auth}, world={world}, Data={data}", flush=True)
     os.execv("/usr/local/bin/benilla-asset-gateway", [
         "benilla-asset-gateway", "--data", str(data), "--web", str(root),
         "--bind", "0.0.0.0:8000", "--auth-upstream", auth, "--world-upstream", world,

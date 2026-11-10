@@ -11,7 +11,7 @@ pub fn locale_label(code: &str) -> &str {
         "enUS" => "English (US)",
         "enGB" => "English (UK)",
         "deDE" => "German",
-        "frFR" => "French",
+        "frFR" => "Français",
         "esES" => "Spanish (Spain)",
         "esMX" => "Spanish (Mexico)",
         "ruRU" => "Russian",

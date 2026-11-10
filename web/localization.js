@@ -41,13 +41,37 @@
       asset_network_error: 'Ошибка сети при загрузке ресурса',
       asset_terminal: 'Загрузка ресурса остановлена: исчерпаны попытки или ошибка шлюза',
     },
+    fr: {
+      client_loading: 'Chargement du client…',
+      client_failed: 'Impossible de démarrer le client. Rechargez la page ou vérifiez la passerelle.',
+      preparing_client: 'Préparation du client…',
+      loading_world: 'Chargement du monde / attente des ressources',
+      interface_failed: "Échec du chargement de l'interface",
+      loading_interface: "Chargement de l'interface et des fichiers d'extension…",
+      preparing_artwork: "Préparation des graphismes de l'interface…",
+      preparing_fonts: 'Préparation des polices…',
+      preparing_ui: "Préparation de l'interface…",
+      loading_catalogs: 'Chargement des catalogues du jeu…',
+      preparing_login: 'Préparation de l’écran de connexion…',
+      pending_files: 'Fichiers en cours de chargement : {count}',
+      attempt: 'Tentative {count}',
+      asset_budget_exhausted: 'Délai de requête des ressources dépassé',
+      asset_timeout: 'Délai d’attente d’une ressource dépassé',
+      asset_empty: 'La passerelle a renvoyé une ressource vide',
+      asset_network_error: 'Erreur réseau lors du chargement d’une ressource',
+      asset_terminal: 'Chargement de la ressource arrêté : limite de tentatives atteinte ou erreur de la passerelle',
+    },
   };
-  const normalizeLocale = code => code === 'ru' || code === 'ruRU' ? 'ruRU' : 'enUS';
+  const normalizeLocale = code => {
+    if (code === 'ru' || code === 'ruRU') return 'ruRU';
+    if (code === 'fr' || code === 'frFR') return 'frFR';
+    return 'enUS';
+  };
   let saved = 'enUS';
   try { saved = localStorage.getItem('benilla:state:v1:locale') || saved; }
   catch (_) { /* Storage restrictions must not prevent startup. */ }
   const locale = normalizeLocale(saved);
-  const language = locale === 'ruRU' ? 'ru' : 'en';
+  const language = locale === 'ruRU' ? 'ru' : locale === 'frFR' ? 'fr' : 'en';
   document.documentElement.lang = language;
   globalThis.BENILLA_I18N = Object.freeze({
     locale,

@@ -697,11 +697,12 @@ impl<'a> Lexer<'a> {
                             }
                             buf.push(val as u8);
                         }
+                        // The 1.12 client's Lua 5.0 drops the backslash for escapes it
+                        // does not know (`\«` in the French GlobalStrings.lua). Match the
+                        // reference lexer instead of rejecting localized client data.
                         Some(c) => {
-                            return Err(self.syntax_error_near(
-                                &format!("invalid escape sequence '\\{}'", char::from(c)),
-                                "<string>",
-                            ));
+                            self.advance();
+                            buf.push(c);
                         }
                         None => {
                             return Err(self.syntax_error_near("unfinished string", "<eof>"));
@@ -1229,8 +1230,11 @@ mod tests {
     }
 
     #[test]
-    fn invalid_escape() {
-        assert!(lex_tokens(r#""\z""#).is_err());
+    fn unknown_escape_keeps_the_character() {
+        // Lua 5.0/5.1 drop the backslash on an unknown escape (the French client's
+        // GlobalStrings.lua uses `\«`); this is the reference lexer's behaviour.
+        let tokens = lex_tokens(r#""\z""#).unwrap();
+        assert_eq!(tokens[0], Token::Str(b"z".to_vec()));
     }
 
     // -- Reader-based lexer tests --

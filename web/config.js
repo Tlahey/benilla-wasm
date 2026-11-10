@@ -2,6 +2,9 @@
 // Empty string uses the page's origin. A reverse-proxy path prefix is supported.
 globalThis.BENILLA_CONFIG = {
   gateway: "",
+  // Account-creation page. Empty derives http://<page-host>:8088/ (the stack's
+  // `accounts` service); set an absolute URL when a proxy rewrites the address.
+  accounts: "",
   // Temporary experiment. Set false and reload to restore the CSS/system cursor.
   persistentPointer: true,
   // Browser audio unlocks on a trusted click/key. Set false to open no audio device.

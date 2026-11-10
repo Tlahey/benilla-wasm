@@ -198,6 +198,14 @@ pub(crate) struct Model {
     /// Here rather than on `UiScript` for `framexml_templates`' reason: the loader runs from a
     /// bare `&Lua`, and so does the binding that writes this.
     pub(crate) framexml_debug: std::cell::Cell<i32>,
+    /// **`SetEuropeanNumbers`' flag** — the engine's European number-format switch.
+    ///
+    /// A European locale's `Localization.lua` turns it on in `LocalizeFrames` (the French
+    /// edition's line 12 is `SetEuropeanNumbers(true)`), and the flag is what `%F` reads to print
+    /// a decimal comma. No stock 1.12 FrameXML formats with `%F`, so storing it is the verb's
+    /// whole contract here — the point is that the call is *answered*, not that it changes a
+    /// string. Default off: the reference boots the flag clear until a locale turns it on.
+    pub(crate) european_numbers: std::cell::Cell<bool>,
     /// The FrameXML **font-element registry** (a separate namespace — a font inherits a font,
     /// never a frame template), persisted for the same cross-file reason.
     pub(crate) framexml_fonts:
@@ -1966,6 +1974,7 @@ impl Model {
             addons_saved_character: None,
             framexml_templates: Default::default(),
             framexml_debug: Default::default(),
+            european_numbers: Default::default(),
             framexml_fonts: Default::default(),
             arena: WidgetArena::new(),
             layout_inputs: HashMap::new(),

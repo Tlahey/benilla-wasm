@@ -925,6 +925,29 @@ fn login_input(
                     }
                 }
             }
+            #[cfg(target_arch = "wasm32")]
+            LoginAction::CreateAccount => {
+                // The reference plays `gsLoginNewAccount` for the two buttons in this corner
+                // (`AccountLogin_ManageAccount`, `AccountLogin_LaunchCommunitySite`); ours is
+                // the same act in the same slot, so it plays the same kit.
+                sounds.write(GlueSound("gsLoginNewAccount"));
+                match crate::web_config::accounts_url() {
+                    Some(url) => {
+                        if !crate::web_config::open_accounts_page(&url) {
+                            dialog.open_error(crate::web_config::text(
+                                "The account page could not be opened (check popup blocking).",
+                                "Страница создания аккаунта не открылась (проверьте блокировку всплывающих окон).",
+                                "La page de création de compte n'a pas pu s'ouvrir (vérifie le blocage des popups).",
+                            ));
+                        }
+                    }
+                    None => dialog.open_error(crate::web_config::text(
+                        "Account creation is not configured for this server.",
+                        "Создание аккаунта не настроено для этого сервера.",
+                        "La création de compte n'est pas configurée pour ce serveur.",
+                    )),
+                }
+            }
             LoginAction::ToggleSave => {
                 form.save = !form.save;
                 // Verbatim ref quirk (`AccountLoginSaveAccountName` OnClick): checked plays the
@@ -1049,6 +1072,7 @@ fn login_input(
                         benilla_auth_web::SessionError::InvalidPassword => crate::web_config::text(
                             "Password must contain 1–16 printable ASCII characters (Latin letters, digits or symbols). Please check your keyboard layout.",
                             "Пароль должен содержать от 1 до 16 печатных ASCII-символов (латинские буквы, цифры или знаки). Проверьте раскладку клавиатуры.",
+                            "Le mot de passe doit contenir 1 à 16 caractères ASCII imprimables (lettres latines, chiffres ou symboles). Vérifiez la disposition de votre clavier.",
                         ).to_owned(),
                         other => other.to_string(),
                     };

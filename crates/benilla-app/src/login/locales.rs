@@ -23,7 +23,12 @@ pub(super) fn install(app: &mut App) {
     );
     app.world_mut().resource_mut::<LoginForm>().locale = LocaleChoice {
         selected,
-        status: text("Detecting locale data...", "Поиск языковых данных…").into(),
+        status: text(
+            "Detecting locale data...",
+            "Поиск языковых данных…",
+            "Détection des données de langue…",
+        )
+        .into(),
         ..default()
     };
     app.add_systems(Update, deliver);
@@ -54,11 +59,12 @@ fn deliver(
             form.locale.codes = catalog
                 .codes
                 .into_iter()
-                .filter(|code| matches!(code.as_str(), "enUS" | "ruRU"))
+                .filter(|code| LOCALE_CODES.contains(&code.as_str()))
                 .collect();
             form.locale.status = text(
                 "Language changes reload the page.",
                 "Смена языка перезагрузит страницу.",
+                "Changer de langue recharge la page.",
             )
             .into();
         }
@@ -67,6 +73,7 @@ fn deliver(
             form.locale.status = text(
                 "Locale list unavailable; refresh development gateway.",
                 "Список языков недоступен; перезапустите шлюз разработки.",
+                "Liste des langues indisponible ; rechargez la passerelle de développement.",
             )
             .into();
         }
@@ -86,11 +93,17 @@ pub(super) fn select(form: &mut LoginForm, index: usize) {
         Ok(()) => {
             let changed = code != crate::web_config::active_locale();
             form.locale.selected = code;
-            form.locale.status = text("Language saved.", "Язык сохранён.").into();
+            form.locale.status = text(
+                "Language saved.",
+                "Язык сохранён.",
+                "Langue enregistrée.",
+            )
+            .into();
             if changed {
                 form.locale.status = text(
                     "Reloading with selected language...",
                     "Перезагрузка с выбранным языком…",
+                    "Rechargement avec la langue sélectionnée…",
                 )
                 .into();
                 if let Some(window) = web_sys::window() {
@@ -99,6 +112,7 @@ pub(super) fn select(form: &mut LoginForm, index: usize) {
                         form.locale.status = text(
                             "Saved; reload the page to apply language.",
                             "Сохранено; перезагрузите страницу для смены языка.",
+                            "Enregistré ; rechargez la page pour appliquer la langue.",
                         )
                         .into();
                     }
@@ -110,6 +124,7 @@ pub(super) fn select(form: &mut LoginForm, index: usize) {
             form.locale.status = text(
                 "Could not save language preference.",
                 "Не удалось сохранить язык.",
+                "Impossible d'enregistrer la préférence de langue.",
             )
             .into();
         }
