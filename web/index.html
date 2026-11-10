@@ -52,7 +52,7 @@
         await globalThis.BENILLA_I18N.ready;
       } catch (error) {
         status.hidden = false;
-        status.textContent = `i18n: ${error.message}`;
+        status.textContent = error.message;
         console.error('Benilla i18n failed', error);
         throw error;
       }
