@@ -10,14 +10,25 @@
       #benilla { display: block; }
       #benilla-bootstrap-status { position: fixed; inset: 0; display: grid; place-items: center; color: #ffd778; background: #000; font: 18px sans-serif; pointer-events: none; }
       #benilla-bootstrap-status[hidden] { display: none; }
+      #benilla-addons-link { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2147483647; padding: 5px 12px; border: 1px solid #b89545; border-radius: 5px; background: #0b0d12dd; color: #ffd778; font: 13px "Trebuchet MS", Verdana, sans-serif; text-decoration: none; text-shadow: 1px 1px 2px #000; }
     </style>
   </head>
   <body>
     <canvas id="benilla"></canvas>
+    <a id="benilla-addons-link" href="/addons.html" target="_blank" rel="noopener noreferrer">Add-ons locaux</a>
     <div id="benilla-bootstrap-status" role="status" aria-live="polite"></div>
     <script src="./config.js"></script>
     <script src="./i18n.js"></script>
+    <script src="./bootstrap-errors.js"></script>
     <script type="module">
+      if ('serviceWorker' in navigator) {
+        try {
+          await navigator.serviceWorker.register('./local-addons-sw.js');
+          await navigator.serviceWorker.ready;
+        } catch (error) {
+          console.warn('local add-ons: service worker unavailable', error);
+        }
+      }
       const gateway = new URL(globalThis.BENILLA_CONFIG.gateway || location.origin, location.href);
       if (!['http:', 'https:'].includes(gateway.protocol) || gateway.search || gateway.hash || gateway.username || gateway.password) {
         throw new Error('BENILLA_CONFIG.gateway must be an HTTP(S) URL without credentials, query or fragment');

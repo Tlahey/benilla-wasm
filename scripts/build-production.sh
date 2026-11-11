@@ -34,7 +34,9 @@ mkdir -p "$STAGE/web/pkg-full"
   --remove-name-section --remove-producers-section
 cp web/index.html "$STAGE/web/index.html"
 cp web/config.js "$STAGE/web/config.js"
-cp web/localization.js "$STAGE/web/localization.js"
+cp web/addons.html web/local-addons-sw.js web/bootstrap-errors.js "$STAGE/web/"
+cp web/i18n.js "$STAGE/web/"
+cp -R web/i18n "$STAGE/web/i18n"
 mkdir -p "$STAGE/web/pkg-audio"
 cargo build --locked --target wasm32-unknown-unknown --profile ship -p benilla-audio-web
 "$BINDGEN" "$CARGO_TARGET_DIR/wasm32-unknown-unknown/ship/benilla_audio_web.wasm" \

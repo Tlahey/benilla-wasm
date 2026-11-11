@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add-ons locaux — World of Warcraft 1.12.1</title>
+<style>
+  :root { --gold: #ffd778; --gold-dim: #b89545; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    font-family: "Trebuchet MS", Verdana, sans-serif;
+    background: radial-gradient(circle at 50% -20%, #2a1a0f 0%, #0b0d12 60%);
+    color: #e8e0d0;
+  }
+  main { width: min(92vw, 620px); }
+  .frame {
+    border: 2px solid var(--gold-dim); border-radius: 10px;
+    background: linear-gradient(#121826, #0b0d12);
+    box-shadow: 0 0 40px #000 inset, 0 0 18px #000;
+    padding: 22px 24px 26px;
+  }
+  h1 { margin: 0 0 4px; font-size: 22px; color: var(--gold); font-weight: 600; }
+  h2 { margin: 18px 0 8px; font-size: 15px; color: var(--gold); font-weight: 600; }
+  .sub { margin: 0 0 16px; color: #b9b09e; font-size: 13px; line-height: 1.5; }
+  .sub code { color: #cfc3a5; }
+  .drop {
+    border: 1px dashed #6a5c3f; border-radius: 6px; padding: 16px;
+    text-align: center; color: #cfc3a5; font-size: 13px;
+  }
+  input[type=file] { margin-top: 10px; color: #cfc3a5; width: 100%; }
+  input[type=file]::file-selector-button {
+    border: 1px solid #d4a63a; border-radius: 4px; padding: 7px 12px;
+    background: linear-gradient(#8d1c14, #5e120d); color: var(--gold);
+    font-weight: 700; cursor: pointer;
+  }
+  button {
+    cursor: pointer; border: 1px solid #d4a63a; border-radius: 5px;
+    background: linear-gradient(#8d1c14, #5e120d); color: var(--gold);
+    font-size: 14px; font-weight: 700; padding: 8px 14px;
+    text-shadow: 1px 1px 2px #000;
+  }
+  button:hover { filter: brightness(1.12); }
+  button:disabled { opacity: .55; cursor: wait; }
+  ul { list-style: none; margin: 0; padding: 0; border: 1px solid #2a2320; border-radius: 6px; }
+  .row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-bottom: 1px solid #2a2320;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row .name { flex: 1; color: var(--gold); font-size: 14px; }
+  .row .meta { color: #8f8877; font-size: 12px; margin-top: 2px; }
+  .row .version { color: #8f8877; font-size: 12px; white-space: nowrap; }
+  .empty { padding: 14px 10px; color: #8f8877; font-size: 13px; }
+  .message { margin-top: 14px; font-size: 14px; line-height: 1.4; white-space: pre-wrap; }
+  .ok { color: #7fd87f; }
+  .err { color: #ff8a7a; }
+  .note { margin-top: 16px; padding: 12px; border: 1px solid #4a4130; border-radius: 6px;
+          font-size: 12px; color: #b9b09e; line-height: 1.5; }
+  .note code { color: var(--gold); }
+  .foot { margin-top: 18px; font-size: 12px; color: #8f8877; }
+  a { color: var(--gold-dim); }
+</style>
+</head>
+<body>
+<main>
+  <div class="frame">
+    <h1>Add-ons locaux</h1>
+    <p class="sub">World of Warcraft 1.12.1. Ces add-ons sont stockés dans
+      <strong>ce navigateur</strong> (IndexedDB) et ne sont jamais envoyés au serveur :
+      ils ne sont donc pas partagés avec les autres joueurs.<br>
+      Dépose un ZIP contenant un dossier <code>&lt;AddOn&gt;/&lt;AddOn&gt;.toc</code>
+      (Curseforge ; wrapper ignoré) ou une archive GitHub
+      <code>&lt;repo&gt;-&lt;branche&gt;/&lt;repo&gt;.toc</code>.</p>
+
+    <h2>Installés dans ce navigateur</h2>
+    <ul id="list"><li class="empty">Chargement…</li></ul>
+
+    <h2>Ajouter un add-on</h2>
+    <form id="upload" class="drop">
+      <div>Choisis un fichier ZIP</div>
+      <input id="file" type="file" accept=".zip,application/zip">
+      <div style="margin-top:10px"><button id="send" type="submit">Installer</button></div>
+    </form>
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+
+    <div class="note">
+      L'add-on est actif à la prochaine ouverture du jeu : recharge la page du jeu
+      (<code>Ctrl+Shift+R</code>) puis active-le dans l'écran <strong>Add-ons</strong>
+      de la sélection des personnages. Aucun redémarrage de <code>benilla</code> n'est
+      nécessaire : le client lit ce navigateur via son service worker.
+    </div>
+    <p class="foot">
+      <a id="game" href="#">Retour au jeu</a> ·
+      <a href="/">Accueil</a>
+    </p>
+  </div>
+</main>
+<script>
+  const DB_NAME = 'benilla-local-addons';
+  const DB_VERSION = 2;
+  const FILE_STORE = 'files';
+  const META_STORE = 'meta';
+  const MAX_EXTRACTED = 128 * 1024 * 1024;
+  const MAX_FILES = 5000;
+
+  const list = document.getElementById('list');
+  const message = document.getElementById('message');
+  const form = document.getElementById('upload');
+  const fileInput = document.getElementById('file');
+  const send = document.getElementById('send');
+  const game = document.getElementById('game');
+  game.href = '/';
+
+  function openDb() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(FILE_STORE)) db.createObjectStore(FILE_STORE);
+        if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE);
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  function say(text, ok) {
+    message.textContent = text;
+    message.className = 'message ' + (ok ? 'ok' : 'err');
+  }
+
+  function normalize(path) {
+    return path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+  }
+
+  const decoder = new TextDecoder('utf-8');
+  function zipEntries(buffer) {
+    const dv = new DataView(buffer);
+    let eocd = -1;
+    for (let i = buffer.byteLength - 22; i >= 0; i--) {
+      if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd < 0) throw new Error('ZIP invalide : répertoire central introuvable.');
+    const count = dv.getUint16(eocd + 10, true);
+    const offset = dv.getUint32(eocd + 16, true);
+    const entries = [];
+    let p = offset;
+    for (let i = 0; i < count; i++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('Répertoire ZIP invalide.');
+      const flags = dv.getUint16(p + 8, true);
+      const method = dv.getUint16(p + 10, true);
+      const compSize = dv.getUint32(p + 20, true);
+      const uncompSize = dv.getUint32(p + 24, true);
+      const nameLen = dv.getUint16(p + 28, true);
+      const extraLen = dv.getUint16(p + 30, true);
+      const commentLen = dv.getUint16(p + 32, true);
+      const localOff = dv.getUint32(p + 42, true);
+      const name = decoder.decode(new Uint8Array(buffer, p + 46, nameLen));
+      if (!name.endsWith('/')) entries.push({ name, flags, method, compSize, uncompSize, localOff });
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    return entries;
+  }
+
+  async function readEntry(buffer, entry) {
+    if (entry.flags & 1) throw new Error('Le ZIP est chiffré.');
+    const dv = new DataView(buffer);
+    const p = entry.localOff;
+    if (dv.getUint32(p, true) !== 0x04034b50) throw new Error('En-tête local ZIP invalide.');
+    const nameLen = dv.getUint16(p + 26, true);
+    const extraLen = dv.getUint16(p + 28, true);
+    const start = p + 30 + nameLen + extraLen;
+    const data = buffer.slice(start, start + entry.compSize);
+    if (entry.method === 0) return data;
+    if (entry.method !== 8) throw new Error('Compression ZIP non supportée.');
+    const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return await new Response(stream).arrayBuffer();
+  }
+
+  function safePath(name) {
+    if (!name || name.includes('\\') || name.includes('\0') || name.startsWith('/')) return null;
+    const parts = name.split('/');
+    return parts.some(part => part === '' || part === '.' || part === '..') ? null : parts;
+  }
+
+  function findAddonRoots(entries) {
+    const files = new Map();
+    const folders = new Set();
+    for (const entry of entries) {
+      const path = entry.name.replace(/\\/g, '/');
+      if (!safePath(path)) throw new Error('Chemin invalide dans le ZIP : ' + entry.name);
+      files.set(path.toLowerCase(), entry);
+      const parts = path.split('/');
+      parts.pop();
+      while (parts.length) {
+        folders.add(parts.join('/'));
+        parts.pop();
+      }
+    }
+    const roots = [];
+    const rootPaths = [];
+    const sorted = [...folders].sort((a, b) => a.split('/').length - b.split('/').length);
+    for (const folder of sorted) {
+      const lower = folder.toLowerCase();
+      if (rootPaths.some(root => lower.startsWith(root + '/'))) continue;
+      const folderName = folder.slice(folder.lastIndexOf('/') + 1);
+      const exact = files.get((lower + '/' + folderName.toLowerCase() + '.toc'));
+      let name = folderName;
+      if (!exact) {
+        const prefix = lower + '/';
+        const stems = entries
+          .map(entry => entry.name.replace(/\\/g, '/'))
+          .filter(path => {
+            const lower = path.toLowerCase();
+            return lower.startsWith(prefix)
+              && !lower.slice(prefix.length).includes('/')
+              && lower.endsWith('.toc');
+          })
+          .map(path => path.slice(path.lastIndexOf('/') + 1, -4))
+          .filter(stem => /^[A-Za-z0-9!_][A-Za-z0-9!_.-]{0,63}$/.test(stem));
+        const matching = stems
+          .filter(stem => folderName.toLowerCase().startsWith(stem.toLowerCase() + '-'))
+          .sort((a, b) => b.length - a.length);
+        if (matching.length) name = matching[0];
+        else if (stems.length === 1) name = stems[0];
+        else continue;
+      }
+      roots.push({ folder, name });
+      rootPaths.push(lower);
+    }
+    if (!roots.length) throw new Error('Aucun dossier <Nom>/<Nom>.toc trouvé dans le ZIP.');
+    const names = new Set();
+    for (const root of roots) {
+      const key = root.name.toLowerCase();
+      if (names.has(key)) throw new Error('Deux add-ons nommés ' + root.name + '.');
+      names.add(key);
+    }
+    if (roots.length > 200) throw new Error('Le ZIP contient trop d\'add-ons.');
+    return roots;
+  }
+
+  function tocMetadata(text) {
+    let title = null;
+    let interfaceVersion = 0;
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed.toLowerCase().startsWith('## title:')) {
+        title = trimmed.split(':').slice(1).join(':').trim() || null;
+      } else if (trimmed.toLowerCase().startsWith('## interface:')) {
+        const first = trimmed.split(':').slice(1).join(':').trim().split(',')[0].trim();
+        const parsed = parseInt(first, 10);
+        if (!Number.isNaN(parsed)) interfaceVersion = parsed;
+      }
+    }
+    return { title, interface: interfaceVersion };
+  }
+
+  async function installZip(file) {
+    const buffer = await file.arrayBuffer();
+    const entries = zipEntries(buffer);
+    if (!entries.length) throw new Error('Le ZIP est vide.');
+    if (entries.length > MAX_FILES) throw new Error('Le ZIP contient trop de fichiers.');
+    const total = entries.reduce((sum, entry) => sum + entry.uncompSize, 0);
+    if (total > MAX_EXTRACTED) throw new Error('Le ZIP décompresse trop gros.');
+    const roots = findAddonRoots(entries);
+    const db = await openDb();
+    const lowerEntries = new Map();
+    for (const entry of entries) {
+      const key = entry.name.toLowerCase();
+      if (lowerEntries.has(key)) throw new Error('Deux fichiers en conflit de casse : ' + entry.name);
+      lowerEntries.set(key, entry);
+    }
+    const files = [];
+    const meta = [];
+    for (const root of roots) {
+      const prefix = root.folder.toLowerCase() + '/';
+      const installPrefix = 'Interface/AddOns/' + root.name + '/';
+      const toc = lowerEntries.get(prefix + root.name.toLowerCase() + '.toc');
+      const tocBytes = toc ? await readEntry(buffer, toc) : null;
+      const tocText = tocBytes ? new TextDecoder('utf-8').decode(tocBytes) : '';
+      meta.push({ name: root.name, ...tocMetadata(tocText) });
+      for (const [lower, entry] of lowerEntries) {
+        if (!lower.startsWith(prefix)) continue;
+        const relative = entry.name.replace(/\\/g, '/').slice(root.folder.length + 1);
+        const installPath = installPrefix + relative;
+        files.push({
+          key: normalize(installPath),
+          path: installPath,
+          bytes: await readEntry(buffer, entry),
+        });
+      }
+    }
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction([FILE_STORE, META_STORE], 'readwrite');
+      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => resolve();
+      for (const item of files) {
+        tx.objectStore(FILE_STORE).put({ key: item.key, path: item.path, bytes: item.bytes }, item.key);
+      }
+      for (const item of meta) {
+        tx.objectStore(META_STORE).put(item, item.name.toLowerCase());
+      }
+    });
+    return meta.map(item => item.name);
+  }
+
+  async function removeAddon(name) {
+    const db = await openDb();
+    const lower = name.toLowerCase();
+    const prefix = normalize('Interface/AddOns/' + name + '/');
+    const keys = await new Promise((resolve, reject) => {
+      const request = db.transaction(FILE_STORE, 'readonly').objectStore(FILE_STORE).getAllKeys();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction([FILE_STORE, META_STORE], 'readwrite');
+      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => resolve();
+      for (const key of keys) if (key.startsWith(prefix)) tx.objectStore(FILE_STORE).delete(key);
+      tx.objectStore(META_STORE).delete(lower);
+    });
+  }
+
+  async function load() {
+    try {
+      const db = await openDb();
+      const addons = await new Promise((resolve, reject) => {
+        const request = db.transaction(META_STORE, 'readonly').objectStore(META_STORE).getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+      addons.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+      list.textContent = '';
+      if (!addons.length) {
+        const empty = document.createElement('li');
+        empty.className = 'empty';
+        empty.textContent = 'Aucun add-on local.';
+        list.appendChild(empty);
+        return;
+      }
+      for (const addon of addons) {
+        const row = document.createElement('li');
+        row.className = 'row';
+        const info = document.createElement('div');
+        const name = document.createElement('div');
+        const meta = document.createElement('div');
+        const version = document.createElement('div');
+        const remove = document.createElement('button');
+        name.className = 'name';
+        meta.className = 'meta';
+        version.className = 'version';
+        name.textContent = addon.title || addon.name;
+        meta.textContent = addon.title ? addon.name : '';
+        version.textContent = addon.interface ? 'Interface ' + addon.interface : '';
+        remove.textContent = 'Retirer';
+        remove.addEventListener('click', async () => {
+          if (!confirm('Retirer ' + addon.name + ' ?')) return;
+          await removeAddon(addon.name);
+          await load();
+          say('Retiré : ' + addon.name + '. Recharge la page du jeu.', true);
+        });
+        info.appendChild(name);
+        if (addon.title) info.appendChild(meta);
+        row.appendChild(info);
+        row.appendChild(version);
+        row.appendChild(remove);
+        list.appendChild(row);
+      }
+    } catch (error) {
+      list.innerHTML = '';
+      const empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'La liste est indisponible : ' + error.message;
+      list.appendChild(empty);
+    }
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) { say('Choisis un fichier ZIP.', false); return; }
+    send.disabled = true;
+    say('Installation…', true);
+    try {
+      const installed = await installZip(file);
+      await load();
+      say('Installé : ' + installed.join(', ') +
+          '.\nRecharge la page du jeu (Ctrl+Shift+R).', true);
+      form.reset();
+    } catch (error) {
+      say('Installation impossible : ' + error.message, false);
+    } finally {
+      send.disabled = false;
+    }
+  });
+
+  load();
+</script>
+</body>
+</html>
