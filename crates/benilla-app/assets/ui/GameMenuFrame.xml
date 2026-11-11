@@ -65,18 +65,16 @@
             Rewards / What's New / Ratings are structurally off in Era — store disabled, no
             account store, IsStandard() false, koKR only.)
           · The layout math those constants produce, precomputed here (this engine has no layout
-            frames) — for OUR seven rungs, the era's eight minus AddOns (next bullet):
-            width 28+144+28 = 200; button tops 32/73/94/115/156/177/218; height 218+21+28 = 267.
-            When MoveAnything is loaded, Edit Mode is hidden and the menu returns to six rungs
-            (200x246). Anchored as a TOPLEFT chain so the gaps read in the XML.
+            frames) — for our eight rungs: width 28+144+28 = 200; button tops
+            32/73/94/115/136/177/198/239; height 239+21+28 = 288. When MoveAnything is loaded,
+            Edit Mode is hidden and the menu returns to seven rungs (200x267). Anchored as a
+            TOPLEFT chain so the gaps read in the XML.
           · No Key Bindings rung — the era menu's own shape: 1.15 ceded the entry to the
             Settings panel, and since decision 1008 ours lives there too (the Options window's
             Keybindings category, KeyBindingsPage.xml). 0997 had carved the 1.13/1.14 seat back
             in for its standalone window; that seat left with the window.
-          · No AddOns rung — the director's call: the char-select AddOns screen
-            (`char_select::addons`, the reference's own glue-side home for this list) is the only
-            addon UI. The in-game panel 1197 put behind this rung (AddonList.xml) is retired,
-            and the rung left with it — 1.12's own ESC menu has no AddOns row either.
+          · AddOns is an explicit game-menu entry directly below Macros. It opens the runtime
+            addon registry in the options window; the standalone AddOns tab is removed.
           · The header — Classic/Dialog/DialogTemplates.xml l.11-43 (ClassicDialogHeaderTemplate):
             the same 256x64 UI-DialogBox-Header art, text = MAINMENU_BUTTON, swapped to
             GameFontNormalMed1 (13px) by MainMenuFrameMixin:OnLoad. Both header idioms (1.12's
@@ -270,11 +268,11 @@
             </Layer>
         </Layers>
         <Frames>
-            <!-- The era ladder minus its AddOns rung (header SCOPE note):
-                 Options · Edit Mode · gap · Support, Macros · gap · Logout, Exit Game · gap ·
-                 Return to Game. A TOPLEFT chain at the era layout engine's numbers — x 28, first
-                 top -32, 0 between group members, -20 at each section break. Live entries wire
-                 the era OnClick intent; Support stays greyed through GameMenuButton_Pending. -->
+            <!-- The era ladder plus the requested AddOns entry:
+                 Options · Edit Mode · gap · Support, Macros, AddOns · gap · Logout, Exit Game ·
+                 gap · Return to Game. A TOPLEFT chain at the era layout engine's numbers — x 28,
+                 first top -32, 0 between group members, -20 at each section break. Live entries
+                 wire the era OnClick intent; Support stays greyed through GameMenuButton_Pending. -->
 
             <!-- Options — live: the era GameMenuFrame.lua l.88 entry (ShowUIPanel(SettingsPanel)
                  there, BenillaOptionsFrame here) plus an explicit HideUIPanel first. The ref leans on
@@ -328,6 +326,20 @@
                     </OnClick>
                 </Scripts>
             </Button>
+            <Button name="GameMenuButtonAddOns" inherits="GameMenuButtonTemplate">
+                <Anchors>
+                    <Anchor point="TOPLEFT" relativeTo="GameMenuButtonMacros" relativePoint="BOTTOMLEFT"><Offset><AbsDimension x="0" y="0"/></Offset></Anchor>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>self:SetText(GameMenuText("AddOns"))</OnLoad>
+                    <OnClick>
+                        PlaySound("igMainMenuOption")
+                        HideUIPanel(GameMenuFrame)
+                        ShowUIPanel(BenillaOptionsFrame)
+                        OptionsAddOnsPage_Show()
+                    </OnClick>
+                </Scripts>
+            </Button>
 
             <!-- The three that are live. The ref's OnShow on both Logout and Quit disables the
                  button while either logout dialog is already up (you cannot re-arm a running
@@ -335,7 +347,7 @@
                  re-read that state. -->
             <Button name="GameMenuButtonLogout" inherits="GameMenuButtonTemplate" text="LOGOUT">
                 <Anchors>
-                    <Anchor point="TOPLEFT" relativeTo="GameMenuButtonMacros" relativePoint="BOTTOMLEFT"><Offset><AbsDimension x="0" y="-20"/></Offset></Anchor>
+                    <Anchor point="TOPLEFT" relativeTo="GameMenuButtonAddOns" relativePoint="BOTTOMLEFT"><Offset><AbsDimension x="0" y="-20"/></Offset></Anchor>
                 </Anchors>
                 <Scripts>
                     <OnShow>
@@ -411,7 +423,7 @@
                         0,
                         -20
                     )
-                    this:SetHeight(246)
+                    this:SetHeight(267)
                 else
                     GameMenuButtonEditMode:Show()
                     GameMenuButtonSupport:ClearAllPoints()
@@ -422,7 +434,7 @@
                         0,
                         0
                     )
-                    this:SetHeight(267)
+                    this:SetHeight(288)
                 end
                 if UpdateMicroButtons then UpdateMicroButtons() end
                 if Disable_BagButtons then Disable_BagButtons() end

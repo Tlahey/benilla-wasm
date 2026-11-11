@@ -42,10 +42,9 @@
           elements, 18-tall spacer between groups (so 22 row-to-header).
         · **Page area** — Blizzard_SettingsList.xml: title 20px white TOPLEFT (7,-22), the
           options_horizontaldivider at TOP (0,-50), Defaults 96x22 at TOPRIGHT (-36,-16).
-        · **Tabs** — SharedXML Shared/Tabs/MinimalTab.{xml,lua}: a bottom-anchored three-slice
-          of Options_Tab[_Active]_{Left,Middle,Right}, GameTab TOPLEFT (32,-27) h37, AddOnsTab
-          5 right of it; width text+40; selected = white small text at BOTTOM+6, unselected =
-          gold small at BOTTOM+4.
+        · **Game tab** — SharedXML Shared/Tabs/MinimalTab.{xml,lua}: a bottom-anchored three-slice
+          of Options_Tab[_Active]_{Left,Middle,Right}, GameTab TOPLEFT (32,-27) h37; width
+          text+40; selected = white small text at BOTTOM+6.
         · **Search box** — SharedXML SearchBoxTemplate → InputBoxVisualTemplate
           (SecureUIPanelTemplates.xml l.42-67): the common-search-border three-slice (8x20 caps,
           left hung 5 outside, middle stretched, all centered on the 22 box), 10x10 magnifier at
@@ -374,6 +373,7 @@
             ["Medium"] = "Среднее", ["Minimal"] = "Минимальное", ["Full"] = "Полное",
         }
         local optionFrench = {
+            ["AddOns"] = "Extensions",
             ["Edit Mode"] = "Mode édition", ["Support"] = "Assistance",
             ["Player"] = "Joueur", ["Target"] = "Cible", ["Party"] = "Groupe",
             ["Pet"] = "Familier", ["Minimap"] = "Minicarte", ["Buffs"] = "Améliorations",
@@ -399,7 +399,7 @@
 
         function BenillaOptionsFrame_LocalizeChrome()
             local texts = {
-                TitleText = "Options", GameTab = "Game", AddOnsTab = "AddOns",
+                TitleText = "Options", GameTab = "Game",
                 CloseButton = "Close", ApplyButton = "Apply", ContainerDefaults = "Defaults",
                 SearchBoxInstructions = "Search", ContainerBodyNoResults = "No results found.",
                 CategoryListHeaderGameplayLabel = "Gameplay", CategoryListHeaderSystemLabel = "System",
@@ -460,9 +460,9 @@
         -- registry, which the logout tail persists to the per-character state file.
         OPTIONS_ADDON_POOL = {}
 
-        -- Swap the two era tab plates (MinimalTabMixin: active = white small text at BOTTOM+6,
-        -- inactive = gold small at BOTTOM+4; the 1.12 plate pair flipped via TexCoords, exactly
-        -- as the XML authored it).
+        -- Set the remaining game tab state (MinimalTabMixin: active = white small text at
+        -- BOTTOM+6, inactive = gold small at BOTTOM+4; the 1.12 plate pair flips via TexCoords,
+        -- exactly as the XML authored it).
         function OptionsTab_SetState(prefix, selected)
             local plate = getglobal("BenillaOptionsFrame" .. prefix .. "Plate")
             local text = getglobal("BenillaOptionsFrame" .. prefix .. "Text")
@@ -484,8 +484,9 @@
         -- Back to the CVar pages: restore the category list, the search box and Defaults.
         function OptionsGameTab_OnClick()
             OptionsTab_SetState("Game", true)
-            OptionsTab_SetState("AddOns", false)
+            BenillaOptionsFrameTitleText:SetText(OptionsText("Options"))
             OptionsAddOns_Cancel()
+            BenillaOptionsFrameGameTab:Show()
             local addonsPage = getglobal("BenillaOptionsFrameContainerBodyAddOns")
             if addonsPage then addonsPage:Hide() end
             local addLocal = getglobal("BenillaOptionsFrameContainerAddOnsAdd")
@@ -499,10 +500,11 @@
 
         -- The AddOns page stages this character's addon changes until Apply; the browser-local
         -- installer stays available beside the bulk controls.
-        function OptionsAddOnsTab_OnClick()
+        function OptionsAddOnsPage_Show()
             local alreadySelected = BenillaOptionsFrame.selectedCategory == "AddOns"
             OptionsTab_SetState("Game", false)
-            OptionsTab_SetState("AddOns", true)
+            BenillaOptionsFrameGameTab:Hide()
+            BenillaOptionsFrameTitleText:SetText(OptionsText("AddOns"))
             BenillaOptionsFrame.selectedCategory = "AddOns"
             BenillaOptionsFrameCategoryBox:Hide()
             BenillaOptionsFrameCategoryList:Hide()
@@ -516,7 +518,7 @@
             getglobal("BenillaOptionsFrameContainerBodyKeybindings"):Hide()
             local addonsPage = getglobal("BenillaOptionsFrameContainerBodyAddOns")
             addonsPage:Show()
-            BenillaOptionsFrameContainerTitle:SetText("AddOns")
+            BenillaOptionsFrameContainerTitle:SetText(OptionsText("AddOns"))
             BenillaOptionsFrameContainerDefaults:Hide()
             BenillaOptionsFrameContainerUnbind:Hide()
             BenillaOptionsFrameContainerAddOnsAdd:Show()
@@ -643,7 +645,8 @@
                 hover:Show()
                 GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
                 GameTooltip:SetText(row.addonName)
-                local notes = select(3, GetAddOnInfo(row.addonName))
+                local info = BenillaGetAddOnInfo or GetAddOnInfo
+                local _, _, notes = info(row.index)
                 if notes then GameTooltip:AddLine(notes, 1, 1, 1, true) end
                 GameTooltip:Show()
             else
@@ -671,7 +674,7 @@
             if empty then
                 if n == 0 then empty:Show() else empty:Hide() end
             end
-            BenillaOptionsFrameContainerTitle:SetText("AddOns (" .. n .. ")")
+            BenillaOptionsFrameContainerTitle:SetText(OptionsText("AddOns") .. " (" .. n .. ")")
             for i = n + 1, table.getn(OPTIONS_ADDON_POOL) do
                 OPTIONS_ADDON_POOL[i]:Hide()
             end
@@ -737,7 +740,7 @@
             BenillaOptionsFrameContainer:SetPoint("TOPLEFT", BenillaOptionsFrameCategoryList, "TOPRIGHT", 16, 0)
             BenillaOptionsFrameContainer:SetPoint("BOTTOMRIGHT", BenillaOptionsFrame, "BOTTOMRIGHT", -22, 47)
             OptionsTab_SetState("Game", true)
-            OptionsTab_SetState("AddOns", false)
+            BenillaOptionsFrameGameTab:Show()
             local addonsPage = getglobal("BenillaOptionsFrameContainerBodyAddOns")
             if addonsPage then addonsPage:Hide() end
             BenillaOptionsFrameContainerAddOnsAdd:Hide()
@@ -2618,16 +2621,15 @@
                     </OnLoad>
                 </Scripts>
             </Frame>
-            <!-- ── Tabs — seated the 1.14 way: the tab's BOTTOM sits on the category box's
+            <!-- ── Game tab — seated the 1.14 way: its BOTTOM sits on the category box's
                  top edge, tucked 3 units INTO it (InterfaceOptionsFrame.xml l.152-158:
                  Tab1 BOTTOMLEFT → Categories TOPLEFT (6,-3)) — the file-folder read, no dead
                  band above (0981; 0978 floated them at the era's TOPLEFT (32,-27) over a
                  24-unit bare strip, the director's gap report). Era width/text law kept
                  (width text+40 measured once per show, selected white small text at BOTTOM+6
                  vs gold at BOTTOM+4),
-                 authored STATIC: Game is the only tab with anything behind it, so it wears
-                 the selected state permanently and AddOns the unselected one (still dead to
-                 clicks; the mixin port comes with an addon list). The PLATE is the 0978
+                 authored STATIC: Game is the only tab with anything behind it. The AddOns page
+                 is opened from the game menu and hides this tab while active. The PLATE is the 0978
                  mapping, kept: one UI-Character-{Active,InActive}Tab piece, bottom-anchored
                  at the era plate height (26/23), flipped vertically via TexCoords (1.12 only
                  ships bottom-tab plates; the flip turns them top-tab). -->
@@ -2659,38 +2661,6 @@
                     <OnClick>OptionsGameTab_OnClick(self)</OnClick>
                 </Scripts>
             </Button>
-            <Button name="$parentAddOnsTab">
-                <Size><AbsDimension x="87" y="37"/></Size>
-                <Anchors>
-                    <Anchor point="TOPLEFT" relativeTo="$parentGameTab" relativePoint="TOPRIGHT"><Offset><AbsDimension x="5" y="0"/></Offset></Anchor>
-                </Anchors>
-                <Layers>
-                    <Layer level="ARTWORK">
-                        <Texture name="$parentPlate" file="Interface\PaperDollInfoFrame\UI-Character-InActiveTab">
-                            <Size><AbsDimension y="23"/></Size>
-                            <Anchors>
-                                <Anchor point="BOTTOMLEFT"/>
-                                <Anchor point="BOTTOMRIGHT"/>
-                            </Anchors>
-                            <TexCoords left="0" right="1" top="1" bottom="0"/>
-                        </Texture>
-                    </Layer>
-                </Layers>
-                <ButtonText name="$parentText" text="AddOns">
-                    <Anchors><Anchor point="BOTTOM"><Offset><AbsDimension x="0" y="4"/></Offset></Anchor></Anchors>
-                </ButtonText>
-                <NormalFont inherits="GameFontNormalSmall"/>
-                <HighlightFont inherits="GameFontNormalSmall"/>
-                <DisabledFont inherits="GameFontNormalSmall"/>
-                <!-- The addon page is the runtime registry (baseline + browser-local). The
-                     unselected gold plate is the authored initial state; OptionsTab_SetState
-                     swaps both plates when the tab is pressed. -->
-                <Scripts>
-                    <OnShow>OptionsTab_FitWidth(self)</OnShow>
-                    <OnClick>OptionsAddOnsTab_OnClick(self)</OnClick>
-                </Scripts>
-            </Button>
-
             <!-- ── The category list (era CategoryList, static — it fits) ──────────────────── -->
             <Frame name="$parentCategoryList">
                 <Size><AbsDimension x="199"/></Size>
@@ -5021,7 +4991,9 @@
             <OnShow>
                 BenillaOptionsFrame_LocalizeChrome()
                 BenillaOptionsFrame_UpdateScale()
-                BenillaOptionsFrame_SelectCategory(this.selectedCategory or "Controls")
+                local category = this.selectedCategory
+                if category == "AddOns" then category = this.lastGameCategory end
+                BenillaOptionsFrame_SelectCategory(category or "Controls")
                 if UpdateMicroButtons then UpdateMicroButtons() end
             </OnShow>
             <!-- Hiding discards pending edits (the era wipes its modified table on hide; its

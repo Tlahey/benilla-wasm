@@ -4492,7 +4492,7 @@ impl benilla_ui::script::TextMeasure for SteppedFont {
     }
 }
 
-/// **Both tabs fit their labels once per show** — the era's width law (`MinimalTab.lua` l.7:
+/// **The game tab fits its label once per show** — the era's width law (`MinimalTab.lua` l.7:
 /// label + 40) on the 1.12 tab template's own seat (`<OnShow>` → `PanelTemplates_TabResize`,
 /// decision 1993), with no OnUpdate poll behind it and no `fitted` latch. The engine's measurer
 /// answers `GetStringWidth` inside the Lua call that asks it, so one call is the whole fit.
@@ -4500,10 +4500,10 @@ impl benilla_ui::script::TextMeasure for SteppedFont {
 /// **The seat is a show and not the era's OnLoad, and that is what the numbers below pin.**
 /// `GetStringWidth` answers in the region's OWN units, so its number depends on the owner's
 /// effective scale — and this window's scale is set by `BenillaOptionsFrame_UpdateScale` in the window's
-/// own `<OnShow>`, after every `<OnLoad>` has already run. At OnLoad these tabs measure at scale 1
-/// (64 and 76 here); on the show, behind the window's own OnShow, they measure at the drawn 0.78.
+/// own `<OnShow>`, after every `<OnLoad>` has already run. At OnLoad this tab measures at scale 1;
+/// on the show, behind the window's own OnShow, it measures at the drawn 0.78.
 #[test]
-fn the_two_option_tabs_fit_their_labels_at_the_drawn_scale() {
+fn the_game_tab_fits_its_label_at_the_drawn_scale() {
     let mut s = UiScript::new().unwrap();
     s.set_text_measurer(Box::new(SteppedFont(6.0)));
     let mut s = harness_on(s);
@@ -4517,99 +4517,117 @@ fn the_two_option_tabs_fit_their_labels_at_the_drawn_scale() {
         "ERA_WINDOW_SCALE"
     );
 
-    // The law, against each tab's own live measure.
-    for tab in ["BenillaOptionsFrameGameTab", "BenillaOptionsFrameAddOnsTab"] {
-        let w = num(&mut s, &format!("{tab}:GetWidth()"));
-        let l = num(&mut s, &format!("{tab}Text:GetStringWidth()"));
-        assert!(
-            (w - (l + 40.0)).abs() < 0.01,
-            "{tab} is {w} wide; the era's law is its label ({l}) + 40"
-        );
-    }
-    // …and the numbers themselves, which say WHEN it ran. At 0.78 a 6-unit glyph rasterizes at 5
-    // physical px and reads back 5/0.78 units, so "Game" (4) is 25.64 and "AddOns" (6) is 38.46.
-    // An OnLoad fit — before the window's OnShow set the scale — would have measured at 1 and left
-    // these at 64 and 76, which is 3.3 and 15.5 units off the drawn label.
+    // The law, against the tab's own live measure.
+    let w = num(&mut s, "BenillaOptionsFrameGameTab:GetWidth()");
+    let l = num(&mut s, "BenillaOptionsFrameGameTabText:GetStringWidth()");
+    assert!(
+        (w - (l + 40.0)).abs() < 0.01,
+        "the Game tab is {w} wide; the era's law is its label ({l}) + 40"
+    );
+    // At 0.78 a 6-unit glyph rasterizes at 5 physical px and reads back 5/0.78 units, so "Game"
+    // reads 25.64. An OnLoad fit — before the window's OnShow set the scale — would measure at 1.
     let close = |a: f32, b: f32| (a - b).abs() < 0.01;
     assert!(close(
         num(&mut s, "BenillaOptionsFrameGameTab:GetWidth()"),
         65.641_03
     ));
-    assert!(close(
-        num(&mut s, "BenillaOptionsFrameAddOnsTab:GetWidth()"),
-        78.461_54
-    ));
 
-    // Nothing re-fits them afterwards: the same two numbers with four frames run, which is the
+    // Nothing re-fits it afterwards: the same number with four frames run, which is the
     // value the retired OnUpdate settle used to converge to and latch.
     for _ in 0..4 {
         s.tick(0.016);
         s.resolve();
     }
-    assert!(close(
-        num(&mut s, "BenillaOptionsFrameGameTab:GetWidth()"),
-        65.641_03
-    ));
-    assert!(close(
-        num(&mut s, "BenillaOptionsFrameAddOnsTab:GetWidth()"),
-        78.461_54
-    ));
+    assert!(close(num(&mut s, "BenillaOptionsFrameGameTab:GetWidth()"), 65.641_03));
 
     // A re-show re-fits rather than latching — the stock template's own behaviour, and what lets
     // a tab follow the window's scale when the screen changes under it.
     s.run("HideUIPanel(BenillaOptionsFrame) ShowUIPanel(BenillaOptionsFrame)")
         .unwrap();
     s.resolve();
-    assert!(close(
-        num(&mut s, "BenillaOptionsFrameGameTab:GetWidth()"),
-        65.641_03
-    ));
+    assert!(close(num(&mut s, "BenillaOptionsFrameGameTab:GetWidth()"), 65.641_03));
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
 #[test]
-fn the_addons_tab_switches_from_game_settings_and_shows_the_local_installer() {
+fn the_game_menu_addons_entry_opens_the_addon_page_without_an_options_tab() {
     let mut s = harness();
     s.set_addons_list_opener(Box::new(|| true));
-    s.run("ShowUIPanel(BenillaOptionsFrame) BenillaOptionsFrameAddOnsTab:Click()")
+    s.run("ShowUIPanel(GameMenuFrame) GameMenuButtonAddOns:Click()")
         .unwrap();
 
+    assert!(
+        s.eval::<bool>("return getglobal('BenillaOptionsFrameAddOnsTab') == nil")
+            .unwrap(),
+        "the options window no longer has a separate AddOns tab"
+    );
     assert_eq!(
         s.eval::<String>("return BenillaOptionsFrame.selectedCategory")
             .unwrap(),
         "AddOns"
     );
-    assert!(s
-        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOns:IsVisible()")
-        .unwrap());
-    assert!(s
-        .eval::<bool>("return BenillaOptionsFrameContainerAddOnsAdd:IsVisible()")
-        .unwrap());
+    let addon_title = s
+        .eval::<String>("return BenillaOptionsFrameTitleText:GetText()")
+        .unwrap();
+    let localized_addon_title = s.eval::<String>("return OptionsText('AddOns')").unwrap();
+    assert_eq!(addon_title, localized_addon_title);
+    assert!(
+        s.eval::<bool>("return BenillaOptionsFrameContainerBodyAddOns:IsVisible()")
+            .unwrap()
+    );
+    assert!(
+        s.eval::<bool>("return BenillaOptionsFrameContainerAddOnsAdd:IsVisible()")
+            .unwrap()
+    );
+    assert!(!s.eval::<bool>("return GameMenuFrame:IsVisible()").unwrap());
+    assert!(
+        !s.eval::<bool>("return BenillaOptionsFrameGameTab:IsVisible()")
+            .unwrap()
+    );
     for action in ["EnableAll", "DisableAll", "Apply", "Cancel", "FullList"] {
-        assert!(s
-            .eval::<bool>(&format!(
+        assert!(
+            s.eval::<bool>(&format!(
                 "return BenillaOptionsFrameContainerBodyAddOns{action}:IsVisible()"
             ))
-            .unwrap());
+            .unwrap()
+        );
     }
     s.run("BenillaOptionsFrameContainerBodyAddOnsFullList:Click()")
         .unwrap();
     assert_eq!(
         s.eval::<String>("return BenillaOptionsFrameContainerTitle:GetText()")
             .unwrap(),
-        "AddOns (0)"
+        s.eval::<String>("return OptionsText('AddOns') .. ' (0)'")
+            .unwrap()
     );
 
-    s.run("BenillaOptionsFrameGameTab:Click()").unwrap();
-    assert!(!s
-        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOns:IsVisible()")
-        .unwrap());
-    assert!(!s
-        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsEnableAll:IsVisible()")
-        .unwrap());
-    assert!(s
-        .eval::<bool>("return BenillaOptionsFrameCategoryList:IsVisible()")
-        .unwrap());
+    s.run(
+        "BenillaOptionsFrameCloseButton:Click() \
+         ShowUIPanel(GameMenuFrame) \
+         GameMenuButtonOptions:Click()",
+    )
+    .unwrap();
+    assert!(
+        !s.eval::<bool>("return BenillaOptionsFrameContainerBodyAddOns:IsVisible()")
+            .unwrap()
+    );
+    assert!(
+        !s.eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsEnableAll:IsVisible()")
+            .unwrap()
+    );
+    assert!(
+        s.eval::<bool>("return BenillaOptionsFrameCategoryList:IsVisible()")
+            .unwrap()
+    );
+    assert!(
+        s.eval::<bool>("return BenillaOptionsFrameGameTab:IsVisible()")
+            .unwrap()
+    );
+    let options_title = s
+        .eval::<String>("return BenillaOptionsFrameTitleText:GetText()")
+        .unwrap();
+    let localized_options_title = s.eval::<String>("return OptionsText('Options')").unwrap();
+    assert_eq!(options_title, localized_options_title);
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
@@ -4622,30 +4640,43 @@ fn addon_options_stage_bulk_changes_until_apply_or_cancel() {
         BenillaGetNumAddOns = function() return 2 end
         BenillaGetAddOnInfo = function(i)
             local name = i == 1 and "Alpha" or "Beta"
-            return name, name, nil, ADDON_TEST_STATE[name] and 1 or nil, 1, nil
+            return name, name, name .. " notes", ADDON_TEST_STATE[name] and 1 or nil, 1, nil
         end
         EnableAddOn = function(name) ADDON_TEST_STATE[name] = true end
         DisableAddOn = function(name) ADDON_TEST_STATE[name] = false end
         ShowUIPanel(BenillaOptionsFrame)
-        BenillaOptionsFrameAddOnsTab:Click()
+        OptionsAddOnsPage_Show()
         "#,
     )
     .unwrap();
 
-    assert!(s
-        .eval::<bool>("return BenillaOptionsAddOnRow1Check:GetChecked()")
-        .unwrap());
-    assert!(s
-        .eval::<bool>("return BenillaOptionsAddOnRow1:IsVisible()")
-        .unwrap());
+    assert!(
+        s.eval::<bool>("return BenillaOptionsAddOnRow1Check:GetChecked()")
+            .unwrap()
+    );
+    assert!(
+        s.eval::<bool>("return BenillaOptionsAddOnRow1:IsVisible()")
+            .unwrap()
+    );
     assert_eq!(
         s.eval::<String>("return BenillaOptionsAddOnRow1Label:GetText()")
             .unwrap(),
         "Alpha"
     );
-    assert!(!s
-        .eval::<bool>("return BenillaOptionsAddOnRow2Check:GetChecked()")
-        .unwrap());
+    assert!(
+        !s.eval::<bool>("return BenillaOptionsAddOnRow2Check:GetChecked()")
+            .unwrap()
+    );
+    s.run("select = nil OptionsAddOnRow_Hover(BenillaOptionsAddOnRow1, true)")
+        .unwrap();
+    assert!(s.eval::<bool>("return GameTooltip:IsVisible()").unwrap());
+    assert_eq!(
+        s.eval::<String>("return GameTooltipTextLeft2:GetText()")
+            .unwrap(),
+        "Alpha notes"
+    );
+    s.run("OptionsAddOnRow_Hover(BenillaOptionsAddOnRow1, nil)")
+        .unwrap();
 
     s.run(
         "BenillaOptionsAddOnRow1Check:SetChecked(false) \
@@ -4653,32 +4684,37 @@ fn addon_options_stage_bulk_changes_until_apply_or_cancel() {
     )
     .unwrap();
     assert!(s.eval::<bool>("return ADDON_TEST_STATE.Alpha").unwrap());
-    assert!(s
-        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
-        .unwrap());
+    assert!(
+        s.eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
+            .unwrap()
+    );
 
     s.run("BenillaOptionsFrameContainerBodyAddOnsCancel:Click()")
         .unwrap();
-    assert!(s
-        .eval::<bool>("return BenillaOptionsAddOnRow1Check:GetChecked()")
-        .unwrap());
-    assert!(!s
-        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
-        .unwrap());
+    assert!(
+        s.eval::<bool>("return BenillaOptionsAddOnRow1Check:GetChecked()")
+            .unwrap()
+    );
+    assert!(
+        !s.eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
+            .unwrap()
+    );
 
     s.run(
         "BenillaOptionsAddOnRow1Check:SetChecked(false) \
          OptionsAddOnRow_OnClick(BenillaOptionsAddOnRow1Check) \
          BenillaOptionsFrameGameTab:Click() \
-         BenillaOptionsFrameAddOnsTab:Click()",
+         OptionsAddOnsPage_Show()",
     )
     .unwrap();
-    assert!(s
-        .eval::<bool>("return BenillaOptionsAddOnRow1Check:GetChecked()")
-        .unwrap());
-    assert!(!s
-        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
-        .unwrap());
+    assert!(
+        s.eval::<bool>("return BenillaOptionsAddOnRow1Check:GetChecked()")
+            .unwrap()
+    );
+    assert!(
+        !s.eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
+            .unwrap()
+    );
 
     s.run(
         "BenillaOptionsFrameContainerBodyAddOnsDisableAll:Click() \
@@ -4687,9 +4723,10 @@ fn addon_options_stage_bulk_changes_until_apply_or_cancel() {
     .unwrap();
     assert!(!s.eval::<bool>("return ADDON_TEST_STATE.Alpha").unwrap());
     assert!(!s.eval::<bool>("return ADDON_TEST_STATE.Beta").unwrap());
-    assert!(!s
-        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
-        .unwrap());
+    assert!(
+        !s.eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
+            .unwrap()
+    );
 
     s.run(
         "BenillaOptionsFrameContainerBodyAddOnsEnableAll:Click() \
@@ -4711,13 +4748,14 @@ fn without_a_seated_measurer_the_same_fit_reads_zero() {
     let mut s = harness_on(UiScript::new().unwrap());
     s.run("ShowUIPanel(BenillaOptionsFrame)").unwrap();
     s.resolve();
-    for tab in ["BenillaOptionsFrameGameTab", "BenillaOptionsFrameAddOnsTab"] {
-        let w: f32 = s.eval(&format!("return {tab}:GetWidth()")).unwrap();
-        assert!(
-            (w - 40.0).abs() < 0.01,
-            "{tab} is {w} wide, not the bare 40"
-        );
-    }
+    let w: f32 = s
+        .eval("return BenillaOptionsFrameGameTab:GetWidth()")
+        .unwrap();
+    assert!((w - 40.0).abs() < 0.01, "the Game tab is {w} wide, not 40");
+    assert!(
+        s.eval::<bool>("return getglobal('BenillaOptionsFrameAddOnsTab') == nil")
+            .unwrap()
+    );
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 

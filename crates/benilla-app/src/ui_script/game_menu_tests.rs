@@ -1,7 +1,7 @@
 //! The shipped `assets/ui/GameMenuFrame.xml` — the frame ESC opens (decision 0674).
 //!
-//! What these guard, in order: the ladder geometry (the ERA menu shape minus its AddOns rung —
-//! 200×267, seven rungs in three 20-gapped sections, the era layout engine's own numbers
+//! What these guard, in order: the ladder geometry (the ERA menu shape with an AddOns rung —
+//! 200×288, eight rungs in three 20-gapped sections, the era layout engine's own numbers
 //! precomputed in the XML's header note); the conditional MoveAnything layout; the greyed pending
 //! entry; the built-in editor's draggable core frames; the live buttons' wire intents and sounds;
 //! the ESC ladder's two new rungs (open when nothing is left to eat, close before everything
@@ -87,26 +87,25 @@ fn bag_harness_with(before: &[&str], after: &[&str]) -> UiScript {
     harness_with(&files)
 }
 
-/// The seven buttons, top to bottom — the ERA ladder, its own shape (the director's call on the
-/// 0951 review; GameMenuFrame.xml's header SCOPE note quotes the era source), minus two seats:
+/// The eight buttons, top to bottom — the ERA ladder plus the requested AddOns entry:
 /// 0997's carved Key Bindings seat left with its standalone window (decision 1008 folded key
-/// bindings into the Options window, where the era menu always pointed), and the AddOns rung
-/// left with the in-game panel when the director made the char-select AddOns screen the only
-/// addon UI (it had been live since 1197). Edit Mode is present unless MoveAnything is loaded.
-const LADDER: [&str; 7] = [
+/// bindings into the Options window, where the era menu always pointed). Edit Mode is present
+/// unless MoveAnything is loaded.
+const LADDER: [&str; 8] = [
     "GameMenuButtonOptions",
     "GameMenuButtonEditMode",
     "GameMenuButtonSupport",
     "GameMenuButtonMacros",
+    "GameMenuButtonAddOns",
     "GameMenuButtonLogout",
     "GameMenuButtonQuit",
     "GameMenuButtonContinue",
 ];
 
 /// The ladder geometry — the era layout engine's own numbers (MainMenuFrameTemplates: padding
-/// 32/28/28/28, spacing 0, AddSection gap 20) over our seven rungs: 200×267, each button
-/// 144×21 at x=28, tops at 32/73/94/135/156/197 — three sections split by the 20-unit
-/// gaps after Options, after Macros, and before Return to Game. First thing to break if the
+/// 32/28/28/28, spacing 0, AddSection gap 20) over our eight rungs: 200×288, each button
+/// 144×21 at x=28, tops at 32/73/94/115/136/177/198/239 — three sections split by the 20-unit
+/// gaps after Options, after AddOns, and before Return to Game. First thing to break if the
 /// era shape is ever "tidied".
 #[test]
 fn the_menu_has_the_era_frame_and_button_ladder() {
@@ -118,11 +117,11 @@ fn the_menu_has_the_era_frame_and_button_ladder() {
     let (w, h) = s
         .eval::<(f64, f64)>("return GameMenuFrame:GetWidth(), GameMenuFrame:GetHeight()")
         .unwrap();
-    assert_eq!((w, h), (200.0, 267.0), "the era frame size");
+    assert_eq!((w, h), (200.0, 288.0), "the era frame size");
 
     let top = s.eval::<f64>("return GameMenuFrame:GetTop()").unwrap();
     let left = s.eval::<f64>("return GameMenuFrame:GetLeft()").unwrap();
-    const TOPS: [f64; 7] = [32.0, 73.0, 94.0, 115.0, 156.0, 177.0, 218.0];
+    const TOPS: [f64; 8] = [32.0, 73.0, 94.0, 115.0, 136.0, 177.0, 198.0, 239.0];
     for (name, down) in LADDER.iter().zip(TOPS) {
         let (bw, bh, btop, bleft) = s
             .eval::<(f64, f64, f64, f64)>(&format!(
@@ -148,7 +147,7 @@ fn the_menu_has_the_era_frame_and_button_ladder() {
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
-/// When MoveAnything is loaded, its entry replaces Edit Mode and the menu contracts to six rungs.
+/// When MoveAnything is loaded, its entry replaces Edit Mode and the menu contracts to seven rungs.
 #[test]
 fn move_anything_hides_edit_mode_and_compacts_the_menu() {
     let _data = benilla_formats::wow_data_or_skip!();
@@ -172,8 +171,8 @@ fn move_anything_hides_edit_mode_and_compacts_the_menu() {
     assert_eq!(
         s.eval::<(f64, f64)>("return GameMenuFrame:GetWidth(), GameMenuFrame:GetHeight()")
             .unwrap(),
-        (200.0, 246.0),
-        "the compact six-rung menu size"
+        (200.0, 267.0),
+        "the compact seven-rung menu size"
     );
     let (support_top, options_top) = s
         .eval::<(f64, f64)>("return GameMenuButtonSupport:GetTop(), GameMenuButtonOptions:GetTop()")
@@ -184,9 +183,8 @@ fn move_anything_hides_edit_mode_and_compacts_the_menu() {
 
 /// Support has nothing behind it and stays disabled (the pending idiom: grey label, `-Disabled`
 /// art, exactly how the era menu greys a dead entry). Edit Mode remains available unless
-/// MoveAnything is loaded; everything else in the ladder is live. **Macros left this list in decision
-/// 0983**, when the macro window landed behind it. (AddOns had left it in 1197 and then left the
-/// ladder entirely with its panel — the char-select AddOns screen is the only addon UI.)
+/// MoveAnything is loaded; everything else in the ladder is live. **Macros left this list in
+/// decision 0983**, when the macro window landed behind it.
 #[test]
 fn the_unbacked_entries_are_disabled_and_the_rest_are_live() {
     let _data = benilla_formats::wow_data_or_skip!();
@@ -206,6 +204,7 @@ fn the_unbacked_entries_are_disabled_and_the_rest_are_live() {
     for name in [
         "GameMenuButtonOptions",
         "GameMenuButtonMacros",
+        "GameMenuButtonAddOns",
         "GameMenuButtonLogout",
         "GameMenuButtonQuit",
         "GameMenuButtonContinue",
