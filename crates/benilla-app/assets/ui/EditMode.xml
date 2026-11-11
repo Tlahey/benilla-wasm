@@ -1,0 +1,158 @@
+<Ui>
+    <Script><![CDATA[
+        local editModeFrames = {
+            { name = "PlayerFrame", label = "Player" },
+            { name = "PetFrame", label = "Pet" },
+            { name = "TargetFrame", label = "Target" },
+            { name = "PartyMemberFrame1", label = "Party" },
+            { name = "PartyMemberFrame2", label = "Party" },
+            { name = "PartyMemberFrame3", label = "Party" },
+            { name = "PartyMemberFrame4", label = "Party" },
+            { name = "MinimapCluster", label = "Minimap" },
+            { name = "BuffFrame", label = "Buffs" },
+            { name = "TemporaryEnchantFrame", label = "Buffs" },
+            { name = "MainMenuBar", label = "Action Bars" },
+            { name = "MultiBarBottomLeft", label = "Action Bars" },
+            { name = "MultiBarBottomRight", label = "Action Bars" },
+            { name = "MultiBarRight", label = "Action Bars" },
+            { name = "MultiBarLeft", label = "Action Bars" },
+            { name = "ChatFrame1", label = "Chat" },
+            { name = "ChatFrame2", label = "Chat" },
+            { name = "ChatFrame3", label = "Chat" },
+            { name = "ChatFrame4", label = "Chat" },
+            { name = "ChatFrame5", label = "Chat" },
+            { name = "ChatFrame6", label = "Chat" },
+            { name = "ChatFrame7", label = "Chat" },
+        }
+        local editModeActive = false
+
+        function BenillaEditModeText(label)
+            return OptionsText and OptionsText(label) or label
+        end
+
+        local function editModeHandle(entry, target)
+            local name = "BenillaEditModeHandle" .. entry.name
+            local handle = getglobal(name)
+            if not handle then
+                handle = CreateFrame("Button", name, target, "UIPanelButtonTemplate")
+                handle:SetWidth(110)
+                handle:SetHeight(20)
+                handle:RegisterForDrag("LeftButton")
+                handle:SetScript("OnDragStart", function(self)
+                    self:GetParent():StartMoving()
+                end)
+                handle:SetScript("OnDragStop", function(self)
+                    self:GetParent():StopMovingOrSizing()
+                end)
+            end
+            handle:ClearAllPoints()
+            handle:SetPoint("TOPLEFT", target, "TOPLEFT", 0, 0)
+            handle:SetFrameLevel(target:GetFrameLevel() + 2)
+            handle:SetText(BenillaEditModeText(entry.label))
+            handle:Show()
+        end
+
+        function BenillaEditMode_Start()
+            if editModeActive then return end
+            editModeActive = true
+            for _, entry in ipairs(editModeFrames) do
+                local target = getglobal(entry.name)
+                if target then
+                    target:SetMovable(true)
+                    editModeHandle(entry, target)
+                end
+            end
+            ShowUIPanel(BenillaEditModeToolbar)
+        end
+
+        function BenillaEditMode_End()
+            if not editModeActive then return end
+            editModeActive = false
+            for _, entry in ipairs(editModeFrames) do
+                local target = getglobal(entry.name)
+                local handle = getglobal("BenillaEditModeHandle" .. entry.name)
+                if handle then handle:Hide() end
+                if target then
+                    target:StopMovingOrSizing()
+                end
+            end
+        end
+
+        function BenillaEditMode_Initialize()
+            for _, entry in ipairs(editModeFrames) do
+                local target = getglobal(entry.name)
+                if target then target:SetMovable(true) end
+            end
+        end
+
+        local function resetEditModeLayout()
+            BenillaEditMode_End()
+            for _, entry in ipairs(editModeFrames) do
+                local target = getglobal(entry.name)
+                if target and target:IsUserPlaced() then
+                    target:SetMovable(true)
+                    target:SetUserPlaced(false)
+                end
+            end
+            ReloadUI()
+        end
+
+        StaticPopupDialogs["BENILLA_RESET_LAYOUT"] = {
+            text = BenillaEditModeText("Reset all moved interface frames to their original positions?"),
+            button1 = BenillaEditModeText("Reset"),
+            button2 = BenillaEditModeText("Cancel"),
+            OnAccept = resetEditModeLayout,
+            timeout = 0,
+            whileDead = 1,
+            hideOnEscape = 1,
+            preferredIndex = 3,
+        }
+    ]]></Script>
+
+    <Frame name="BenillaEditModeToolbar" parent="UIParent" frameStrata="DIALOG" enableMouse="true" hidden="true">
+        <Size><AbsDimension x="360" y="82"/></Size>
+        <Anchors><Anchor point="TOP"><Offset><AbsDimension x="0" y="-18"/></Offset></Anchor></Anchors>
+        <Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
+            <BackgroundInsets><AbsInset left="11" right="12" top="12" bottom="11"/></BackgroundInsets>
+            <TileSize><AbsValue val="32"/></TileSize>
+            <EdgeSize><AbsValue val="24"/></EdgeSize>
+        </Backdrop>
+        <Layers>
+            <Layer level="ARTWORK">
+                <FontString name="BenillaEditModeToolbarTitle" inherits="GameFontNormal">
+                    <Anchors><Anchor point="TOP" relativeTo="BenillaEditModeToolbar" relativePoint="TOP"><Offset><AbsDimension x="0" y="-14"/></Offset></Anchor></Anchors>
+                </FontString>
+                <FontString name="BenillaEditModeToolbarHelp" inherits="GameFontHighlightSmall">
+                    <Anchors><Anchor point="TOP" relativeTo="BenillaEditModeToolbarTitle" relativePoint="BOTTOM"><Offset><AbsDimension x="0" y="-3"/></Offset></Anchor></Anchors>
+                </FontString>
+            </Layer>
+        </Layers>
+        <Frames>
+            <Button name="BenillaEditModeDoneButton" inherits="UIPanelButtonTemplate" text="Done">
+                <Size><AbsDimension x="112" y="22"/></Size>
+                <Anchors><Anchor point="BOTTOMLEFT"><Offset><AbsDimension x="16" y="14"/></Offset></Anchor></Anchors>
+                <Scripts>
+                    <OnLoad>self:SetText(BenillaEditModeText("Done"))</OnLoad>
+                    <OnClick>BenillaEditMode_End(); HideUIPanel(BenillaEditModeToolbar)</OnClick>
+                </Scripts>
+            </Button>
+            <Button name="BenillaEditModeResetButton" inherits="UIPanelButtonTemplate" text="Reset Positions">
+                <Size><AbsDimension x="180" y="22"/></Size>
+                <Anchors><Anchor point="BOTTOMRIGHT"><Offset><AbsDimension x="-16" y="14"/></Offset></Anchor></Anchors>
+                <Scripts>
+                    <OnLoad>self:SetText(BenillaEditModeText("Reset Positions"))</OnLoad>
+                    <OnClick>StaticPopup_Show("BENILLA_RESET_LAYOUT")</OnClick>
+                </Scripts>
+            </Button>
+        </Frames>
+        <Scripts>
+            <OnLoad>
+                BenillaEditMode_Initialize()
+                BenillaEditModeToolbarTitle:SetText(BenillaEditModeText("Edit Mode"))
+                BenillaEditModeToolbarHelp:SetText(BenillaEditModeText("Drag a handle to move a window."))
+                UIPanelWindows["BenillaEditModeToolbar"] = { area = "center", pushable = 0, whileDead = 1 }
+            </OnLoad>
+            <OnHide>BenillaEditMode_End()</OnHide>
+        </Scripts>
+    </Frame>
+</Ui>

@@ -81,10 +81,9 @@
             GameFontNormalMed1 (13px) by MainMenuFrameMixin:OnLoad. Both header idioms (1.12's
             TOP+12 texture / era's 39-tall frame with the art centered) seat the art within half
             a unit of each other; the 1.12 transcription is kept, the font and string are era's.
-        - **Edit Mode / Support ship DISABLED** — nothing behind them yet
-          (`GameMenuButton_Pending`): the template's own `-Disabled` art + grey label, exactly
-          how the era menu greys a dead entry (SetEnabled(false) → DisabledFont). Each goes live
-          by deleting one `GameMenuButton_Pending` call and writing its OnClick.
+        - **Support ships DISABLED** — nothing behind it yet (`GameMenuButton_Pending`): the
+          template's own `-Disabled` art + grey label, exactly how the era menu greys a dead entry
+          (SetEnabled(false) → DisabledFont). Edit Mode is wired by the built-in layout editor.
         - Options/Edit Mode/Support are project-owned era-shaped labels: 1.12 has no
           corresponding era globals. Localize them through the existing OptionsText
           catalog, rather than pretending their English defaults are original strings.
@@ -109,7 +108,7 @@
         RETURN_TO_GAME = RETURN_TO_GAME or "Return to Game"
         CANCEL = CANCEL or "Cancel"
 
-        -- One label setter for a button with nothing behind it yet (Edit Mode and Support): set
+        -- One label setter for a button with nothing behind it yet (Support): set
         -- the ref's text, then disable (grey label + the template's -Disabled art). Making it
         -- live is deleting the call and writing its ref OnClick.
         function GameMenuButton_Pending(button, text)
@@ -273,8 +272,7 @@
                  Edit Mode, Support, Macros · gap · Logout, Exit Game · gap · Return to Game.
                  A TOPLEFT chain at the era layout engine's numbers — x 28, first top -32, 0
                  between group members, -20 at each section break. Live entries wire the era
-                 OnClick intent; pending ones grey out through GameMenuButton_Pending until
-                 something exists behind them. -->
+                 OnClick intent; Support stays greyed through GameMenuButton_Pending. -->
 
             <!-- Options — live: the era GameMenuFrame.lua l.88 entry (ShowUIPanel(SettingsPanel)
                  there, BenillaOptionsFrame here) plus an explicit HideUIPanel first. The ref leans on
@@ -299,7 +297,14 @@
                 <Anchors>
                     <Anchor point="TOPLEFT" relativeTo="GameMenuButtonOptions" relativePoint="BOTTOMLEFT"><Offset><AbsDimension x="0" y="-20"/></Offset></Anchor>
                 </Anchors>
-                <Scripts><OnLoad>GameMenuButton_Pending(self, GameMenuText("Edit Mode"))</OnLoad></Scripts>
+                <Scripts>
+                    <OnLoad>self:SetText(GameMenuText("Edit Mode"))</OnLoad>
+                    <OnClick>
+                        PlaySound("igMainMenuOption")
+                        HideUIPanel(GameMenuFrame)
+                        BenillaEditMode_Start()
+                    </OnClick>
+                </Scripts>
             </Button>
             <Button name="GameMenuButtonSupport" inherits="GameMenuButtonTemplate">
                 <Anchors>

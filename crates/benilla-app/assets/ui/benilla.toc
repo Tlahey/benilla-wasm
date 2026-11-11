@@ -1282,4 +1282,5 @@ Interface\FrameXML\TutorialFrame.xml
 # the driver to `UIParent.xml`, the reference's own homes (StaticPopup.lua l.564/586 for the
 # dialogs, UIParent.lua l.304-315 for the three events), both stock since 1988. The ESC menu never
 # owned them; it was just where ours were first needed. That is one less thing to move when the options family lands.
+EditMode.xml
 GameMenuFrame.xml

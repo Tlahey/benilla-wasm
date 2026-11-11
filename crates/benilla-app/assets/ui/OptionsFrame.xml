@@ -352,6 +352,13 @@
         local optionRussian = {
             ["Options"] = "Настройки", ["Game"] = "Игра", ["AddOns"] = "Аддоны",
             ["Edit Mode"] = "Режим редактирования", ["Support"] = "Поддержка",
+            ["Reset"] = "Сбросить", ["Cancel"] = "Отмена",
+            ["Player"] = "Игрок", ["Target"] = "Цель", ["Party"] = "Группа",
+            ["Pet"] = "Питомец", ["Minimap"] = "Мини-карта", ["Buffs"] = "Эффекты",
+            ["Action Bars"] = "Панели команд",
+            ["Done"] = "Готово", ["Reset Positions"] = "Сбросить позиции",
+            ["Drag a handle to move a window."] = "Перетащите метку, чтобы переместить окно.",
+            ["Reset all moved interface frames to their original positions?"] = "Сбросить позиции всех перемещённых окон интерфейса?",
             ["Gameplay"] = "Игровой процесс", ["System"] = "Система",
             ["Audio"] = "Звук", ["Graphics"] = "Графика", ["Combat"] = "Бой",
             ["Interface"] = "Интерфейс", ["Nameplates"] = "Индикаторы здоровья",
@@ -366,6 +373,16 @@
             ["Windowed (Fullscreen)"] = "Оконный (на весь экран)", ["Windowed"] = "Оконный",
             ["Medium"] = "Среднее", ["Minimal"] = "Минимальное", ["Full"] = "Полное",
         }
+        local optionFrench = {
+            ["Edit Mode"] = "Mode édition", ["Support"] = "Assistance",
+            ["Player"] = "Joueur", ["Target"] = "Cible", ["Party"] = "Groupe",
+            ["Pet"] = "Familier", ["Minimap"] = "Minicarte", ["Buffs"] = "Améliorations",
+            ["Action Bars"] = "Barres d'action",
+            ["Done"] = "Terminé", ["Reset Positions"] = "Réinitialiser les positions",
+            ["Drag a handle to move a window."] = "Faites glisser une poignée pour déplacer une fenêtre.",
+            ["Reset all moved interface frames to their original positions?"] = "Réinitialiser les positions de toutes les fenêtres déplacées ?",
+            ["Reset"] = "Réinitialiser", ["Cancel"] = "Annuler",
+        }
         function OptionsText(label, tip)
             local key = optionLabelKeys[label]
             if key and getglobal(key) then return getglobal(key) end
@@ -375,6 +392,7 @@
                 local value = getglobal(stem .. "_TEXT") or getglobal(stem)
                 if type(value) == "string" then return value end
             end
+            if GetLocale() == "frFR" then return optionFrench[label] or label end
             if GetLocale() == "ruRU" then return optionRussian[label] or label end
             return label
         end

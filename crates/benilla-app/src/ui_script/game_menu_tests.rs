@@ -2,8 +2,8 @@
 //!
 //! What these guard, in order: the ladder geometry (the ERA menu shape minus its AddOns rung —
 //! 200×267, seven rungs in three 20-gapped sections, the era layout engine's own numbers
-//! precomputed in the XML's header note); the greyed pending entries; the live buttons' wire
-//! intents and sounds;
+//! precomputed in the XML's header note); the greyed pending entry; Edit Mode's draggable core
+//! frames; the live buttons' wire intents and sounds;
 //! the ESC ladder's two new rungs (open when nothing is left to eat, close before everything
 //! else); the micro button's `clicked` toggle; the native-center rule that makes the menu take
 //! the screen (windows close on the way in, and nothing opens while it is up); and the camp/quit
@@ -52,6 +52,7 @@ fn harness_with(extra: &[&str]) -> UiScript {
     ]
     .into_iter()
     .chain(extra.iter().copied())
+    .chain(std::iter::once("EditMode.xml"))
     .chain(std::iter::once("GameMenuFrame.xml"))
     .collect();
     let mut loaded = std::collections::HashSet::new();
@@ -147,9 +148,9 @@ fn the_menu_has_the_era_frame_and_button_ladder() {
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
-/// The two entries with nothing behind them — Edit Mode, Support — are DISABLED (the pending
-/// idiom: grey label, `-Disabled` art, exactly how the era menu greys a dead entry). Everything
-/// else in the ladder is live. **Macros left this list in decision 0983**, when the macro window
+/// Support has nothing behind it and stays disabled (the pending idiom: grey label, `-Disabled`
+/// art, exactly how the era menu greys a dead entry). Edit Mode is live; everything else in the
+/// ladder is live. **Macros left this list in decision 0983**, when the macro window
 /// landed behind it. (AddOns had left it in 1197 and then left the ladder entirely with its
 /// panel — the char-select AddOns screen is the only addon UI.)
 #[test]
@@ -158,15 +159,14 @@ fn the_unbacked_entries_are_disabled_and_the_rest_are_live() {
     let mut s = harness();
     s.run("ShowUIPanel(GameMenuFrame)").unwrap();
 
-    for name in ["GameMenuButtonEditMode", "GameMenuButtonSupport"] {
-        assert!(
-            !s.eval::<bool>(&format!("return {name}:IsEnabled() ~= 0"))
-                .unwrap(),
-            "{name} has no panel behind it and must read that way"
-        );
-    }
+    assert!(
+        !s.eval::<bool>("return GameMenuButtonSupport:IsEnabled() ~= 0")
+            .unwrap(),
+        "Support has no panel behind it and must read disabled"
+    );
     for name in [
         "GameMenuButtonOptions",
+        "GameMenuButtonEditMode",
         "GameMenuButtonMacros",
         "GameMenuButtonLogout",
         "GameMenuButtonQuit",
@@ -178,6 +178,7 @@ fn the_unbacked_entries_are_disabled_and_the_rest_are_live() {
             "{name} is live"
         );
     }
+
     // Project-owned era labels use the options text catalog when it is loaded.
     // This partial harness without OptionsFrame keeps the English label.
     assert_eq!(
@@ -196,6 +197,61 @@ fn the_unbacked_entries_are_disabled_and_the_rest_are_live() {
             .unwrap(),
         "Options"
     );
+    assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
+}
+
+/// Edit Mode opens its toolbar and the drag handle moves a core frame through the real pointer
+/// path. `userPlaced` is set by the same `StartMoving` gesture the layout cache persists.
+#[test]
+fn edit_mode_moves_a_core_frame_and_closes_cleanly() {
+    let _data = benilla_formats::wow_data_or_skip!();
+    let mut s = harness();
+    s.run(
+        r#"
+        PlayerFrame = CreateFrame("Frame", "PlayerFrame", UIParent)
+        PlayerFrame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 100, 100)
+        PlayerFrame:SetWidth(200)
+        PlayerFrame:SetHeight(80)
+        BenillaEditMode_Initialize()
+        ShowUIPanel(GameMenuFrame)
+        GameMenuButtonEditMode:Click()
+        "#,
+    )
+    .unwrap();
+    s.resolve();
+    assert!(s
+        .eval::<bool>("return BenillaEditModeToolbar:IsVisible()")
+        .unwrap());
+    assert!(s
+        .eval::<bool>("return BenillaEditModeHandlePlayerFrame:IsVisible()")
+        .unwrap());
+
+    s.mouse_button(150.0, 170.0, "LeftButton", true);
+    s.mouse_move(158.0, 178.0);
+    s.mouse_move(166.0, 186.0);
+    s.mouse_button(166.0, 186.0, "LeftButton", false);
+    s.resolve();
+    let (left, bottom) = s
+        .eval::<(f64, f64)>("return PlayerFrame:GetLeft(), PlayerFrame:GetBottom()")
+        .unwrap();
+    assert_eq!((left, bottom), (108.0, 108.0));
+    assert!(
+        s.eval::<bool>("return PlayerFrame:IsUserPlaced()")
+            .unwrap(),
+        "the moved frame is eligible for the existing layout cache"
+    );
+    assert!(s
+        .user_placed_layouts()
+        .iter()
+        .any(|frame| frame.name == "PlayerFrame"));
+
+    s.run("BenillaEditModeDoneButton:Click()").unwrap();
+    assert!(!s
+        .eval::<bool>("return BenillaEditModeToolbar:IsVisible()")
+        .unwrap());
+    assert!(!s
+        .eval::<bool>("return BenillaEditModeHandlePlayerFrame:IsVisible()")
+        .unwrap());
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
