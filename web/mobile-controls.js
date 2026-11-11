@@ -26,6 +26,10 @@ export function actionVisibility(hud = {}) {
   };
 }
 
+export function shouldForwardTouchPointer(touchEnabled, mode, pointerType) {
+  return touchEnabled && (mode === 'login' || mode === 'game') && pointerType === 'touch';
+}
+
 function installMobileControls() {
   const canvas = document.getElementById('benilla');
   if (!canvas) return;
@@ -461,7 +465,7 @@ function installMobileControls() {
     canvas.dispatchEvent(synthetic);
   }
   canvas.addEventListener('pointerdown', event => {
-    if (!isTouch() || mode !== 'game' || event.pointerType !== 'touch') return;
+    if (!shouldForwardTouchPointer(isTouch(), mode, event.pointerType)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     mouseLikePointers.set(event.pointerId, true);
