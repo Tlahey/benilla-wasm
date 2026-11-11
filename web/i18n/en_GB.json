@@ -38,5 +38,8 @@
   "mobile.movement": "Movement",
   "mobile.jump": "Jump",
   "mobile.auto_run": "Toggle auto-run",
-  "mobile.target": "Target nearest enemy"
+  "mobile.target": "Target nearest enemy",
+  "mobile.attack": "Attack",
+  "mobile.primary": "Primary action",
+  "mobile.interact": "Interact"
 }

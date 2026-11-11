@@ -12,6 +12,20 @@ export function joystickKeys(dx, dy, deadZone = 0.22, directionThreshold = 0.38)
   return keys;
 }
 
+export function actionVisibility(hud = {}) {
+  const hasTarget = Boolean(hud.hasTarget);
+  const canAttack = Boolean(hud.canAttack);
+  const canInteract = Boolean(hud.canInteract);
+  return {
+    target: true,
+    autoRun: true,
+    jump: true,
+    attack: hasTarget && canAttack,
+    primary: hasTarget && canAttack,
+    interact: hasTarget && canInteract,
+  };
+}
+
 function installMobileControls() {
   const canvas = document.getElementById('benilla');
   if (!canvas) return;
@@ -21,6 +35,12 @@ function installMobileControls() {
   const pressedKeys = new Set();
   let mode = 'off';
   let submitPending = false;
+  const hudState = {
+    hasTarget: false,
+    inCombat: false,
+    canAttack: false,
+    canInteract: false,
+  };
 
   const style = document.createElement('style');
   style.textContent = `
@@ -87,12 +107,34 @@ function installMobileControls() {
       position: absolute;
       right: calc(18px + env(safe-area-inset-right));
       bottom: calc(18px + env(safe-area-inset-bottom));
-      display: flex;
-      flex-direction: column-reverse;
-      gap: 9px;
+      width: 248px;
+      height: 248px;
       pointer-events: none;
     }
+    .benilla-mobile-orbit {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .benilla-mobile-slot {
+      position: absolute;
+      width: 46px;
+      height: 46px;
+      border: 2px solid #e8c77d66;
+      border-radius: 50%;
+      box-shadow: 0 2px 8px #0008 inset, 0 1px 5px #0009;
+      background: #0b0f1744;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .benilla-mobile-slot[data-core="true"] {
+      width: 56px;
+      height: 56px;
+      border-color: #e8c77da0;
+      background: #0b0f175a;
+    }
     .benilla-mobile-button {
+      position: absolute;
       width: 56px;
       height: 56px;
       padding: 0;
@@ -107,9 +149,34 @@ function installMobileControls() {
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
+      transform: translate(-50%, -50%);
+      transition: opacity 100ms ease;
+    }
+    .benilla-mobile-button[data-armed="true"] {
+      box-shadow: 0 0 0 2px #ffe49a44, 0 2px 12px #0009;
+    }
+    .benilla-mobile-button[data-highlight="true"] {
+      border-color: #f9dd9f;
+      background: #2f2116d9;
+    }
+    .benilla-mobile-button[data-hidden="true"] {
+      opacity: 0;
+      pointer-events: none;
     }
     .benilla-mobile-button:active, .benilla-mobile-joystick:active {
       background-color: #4a3825e6;
+    }
+    .benilla-mobile-button .caption {
+      display: block;
+      letter-spacing: .2px;
+      line-height: 1;
+    }
+    .benilla-mobile-button .hint {
+      display: block;
+      margin-top: 4px;
+      font-size: 9px;
+      opacity: .9;
+      line-height: 1;
     }
     @media (max-height: 500px) {
       .benilla-mobile-joystick {
@@ -122,9 +189,21 @@ function installMobileControls() {
       .benilla-mobile-actions {
         right: calc(12px + env(safe-area-inset-right));
         bottom: calc(10px + env(safe-area-inset-bottom));
-        gap: 6px;
+        width: 212px;
+        height: 212px;
       }
-      .benilla-mobile-button { width: 48px; height: 48px; }
+      .benilla-mobile-button {
+        width: 48px;
+        height: 48px;
+      }
+      .benilla-mobile-slot {
+        width: 40px;
+        height: 40px;
+      }
+      .benilla-mobile-slot[data-core="true"] {
+        width: 50px;
+        height: 50px;
+      }
     }
   `;
   document.head.append(style);
@@ -168,19 +247,49 @@ function installMobileControls() {
 
   const actions = document.createElement('div');
   actions.className = 'benilla-mobile-actions';
+  const orbit = document.createElement('div');
+  orbit.className = 'benilla-mobile-orbit';
+  const orbitSlots = [
+    [20, 77, false],
+    [38, 58, false],
+    [58, 40, false],
+    [77, 22, false],
+    [76, 77, true],
+    [60, 60, true],
+    [43, 44, true],
+    [58, 92, false],
+    [83, 56, false],
+    [92, 81, false],
+  ];
+  for (const [x, y, core] of orbitSlots) {
+    const slot = document.createElement('span');
+    slot.className = 'benilla-mobile-slot';
+    slot.style.left = `${x}%`;
+    slot.style.top = `${y}%`;
+    slot.dataset.core = String(core);
+    orbit.append(slot);
+  }
+  actions.append(orbit);
+
   const actionButtons = [
-    { key: 'Tab', code: 'Tab', label: 'mobile.target', caption: 'TAB' },
-    { key: 'NumLock', code: 'NumLock', label: 'mobile.auto_run', caption: 'AUTO' },
-    { key: ' ', code: 'Space', label: 'mobile.jump', caption: '↑' },
+    { id: 'target', key: 'Tab', code: 'Tab', label: 'mobile.target', caption: 'TAB', hint: 'TGT', x: 58, y: 92 },
+    { id: 'autoRun', key: 'NumLock', code: 'NumLock', label: 'mobile.auto_run', caption: 'RUN', hint: 'AUTO', x: 92, y: 81 },
+    { id: 'jump', key: ' ', code: 'Space', label: 'mobile.jump', caption: 'JMP', hint: 'UP', x: 83, y: 56 },
+    { id: 'attack', key: '1', code: 'Digit1', label: 'mobile.attack', caption: 'ATK', hint: '1', x: 76, y: 77 },
+    { id: 'primary', key: '2', code: 'Digit2', label: 'mobile.primary', caption: 'SKL', hint: '2', x: 60, y: 60 },
+    { id: 'interact', key: 'f', code: 'KeyF', label: 'mobile.interact', caption: 'INT', hint: 'F', x: 43, y: 44 },
   ];
   const buttonEls = actionButtons.map(action => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'benilla-mobile-button';
-    button.textContent = action.caption;
+    button.style.left = `${action.x}%`;
+    button.style.top = `${action.y}%`;
+    button.dataset.actionId = action.id;
     button.dataset.key = action.key;
     button.dataset.code = action.code;
     button.dataset.labelKey = action.label;
+    button.innerHTML = `<span class="caption">${action.caption}</span><span class="hint">${action.hint}</span>`;
     actions.append(button);
     return button;
   });
@@ -289,6 +398,21 @@ function installMobileControls() {
     button.addEventListener('lostpointercapture', release);
   }
 
+  function applyHudVisibility() {
+    const visibleByAction = actionVisibility(hudState);
+    for (const button of buttonEls) {
+      const actionId = button.dataset.actionId;
+      const visible = visibleByAction[actionId] !== false;
+      button.dataset.hidden = String(!visible);
+      const highlighted = actionId === 'attack' && hudState.inCombat;
+      button.dataset.highlight = String(highlighted);
+      if (!visible) {
+        setPressedKey(button.dataset.key, button.dataset.code, false);
+      }
+    }
+    controlRoot.dataset.combat = String(hudState.inCombat);
+  }
+
   function layoutLoginInputs() {
     updateLoginPosition();
   }
@@ -378,6 +502,7 @@ function installMobileControls() {
       if (loginInput.contains(document.activeElement)) document.activeElement.blur();
     }
     updateLoginPosition();
+    applyHudVisibility();
     if (mode !== 'game') releaseAll();
   }
 
@@ -403,6 +528,14 @@ function installMobileControls() {
       submitPending = false;
       return pending;
     },
+    setHudState(nextState) {
+      if (!nextState || typeof nextState !== 'object') return;
+      hudState.hasTarget = Boolean(nextState.hasTarget);
+      hudState.inCombat = Boolean(nextState.inCombat);
+      hudState.canAttack = Boolean(nextState.canAttack);
+      hudState.canInteract = Boolean(nextState.canInteract);
+      applyHudVisibility();
+    },
     syncLogin,
     setLabels(text) {
       account.setAttribute('aria-label', text('mobile.account'));
@@ -418,6 +551,7 @@ function installMobileControls() {
   globalThis.BENILLA_I18N?.ready.then(() => {
     globalThis.BENILLA_MOBILE?.setLabels(globalThis.BENILLA_I18N.text);
   }).catch(error => console.error('Mobile controls localization failed', error));
+  applyHudVisibility();
   layoutLoginInputs();
 }
 

@@ -38,5 +38,8 @@
   "mobile.movement": "Движение",
   "mobile.jump": "Прыжок",
   "mobile.auto_run": "Включить или выключить автоматический бег",
-  "mobile.target": "Выбрать ближайшего противника"
+  "mobile.target": "Выбрать ближайшего противника",
+  "mobile.attack": "Атаковать",
+  "mobile.primary": "Основное действие",
+  "mobile.interact": "Взаимодействовать"
 }
