@@ -2,8 +2,8 @@
 //!
 //! What these guard, in order: the ladder geometry (the ERA menu shape minus its AddOns rung —
 //! 200×267, seven rungs in three 20-gapped sections, the era layout engine's own numbers
-//! precomputed in the XML's header note); the greyed pending entry; Edit Mode's draggable core
-//! frames; the live buttons' wire intents and sounds;
+//! precomputed in the XML's header note); the conditional MoveAnything layout; the greyed pending
+//! entry; the built-in editor's draggable core frames; the live buttons' wire intents and sounds;
 //! the ESC ladder's two new rungs (open when nothing is left to eat, close before everything
 //! else); the micro button's `clicked` toggle; the native-center rule that makes the menu take
 //! the screen (windows close on the way in, and nothing opens while it is up); and the camp/quit
@@ -92,7 +92,7 @@ fn bag_harness_with(before: &[&str], after: &[&str]) -> UiScript {
 /// 0997's carved Key Bindings seat left with its standalone window (decision 1008 folded key
 /// bindings into the Options window, where the era menu always pointed), and the AddOns rung
 /// left with the in-game panel when the director made the char-select AddOns screen the only
-/// addon UI (it had been live since 1197).
+/// addon UI (it had been live since 1197). Edit Mode is present unless MoveAnything is loaded.
 const LADDER: [&str; 7] = [
     "GameMenuButtonOptions",
     "GameMenuButtonEditMode",
@@ -105,7 +105,7 @@ const LADDER: [&str; 7] = [
 
 /// The ladder geometry — the era layout engine's own numbers (MainMenuFrameTemplates: padding
 /// 32/28/28/28, spacing 0, AddSection gap 20) over our seven rungs: 200×267, each button
-/// 144×21 at x=28, tops at 32/73/94/115/156/177/218 — three sections split by the 20-unit
+/// 144×21 at x=28, tops at 32/73/94/135/156/197 — three sections split by the 20-unit
 /// gaps after Options, after Macros, and before Return to Game. First thing to break if the
 /// era shape is ever "tidied".
 #[test]
@@ -148,11 +148,45 @@ fn the_menu_has_the_era_frame_and_button_ladder() {
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
+/// When MoveAnything is loaded, its entry replaces Edit Mode and the menu contracts to six rungs.
+#[test]
+fn move_anything_hides_edit_mode_and_compacts_the_menu() {
+    let _data = benilla_formats::wow_data_or_skip!();
+    let mut s = harness();
+    s.run(
+        r#"
+        IsAddOnLoaded = function(name)
+            return name == "MoveAnything"
+        end
+        ShowUIPanel(GameMenuFrame)
+        "#,
+    )
+    .unwrap();
+    s.resolve();
+
+    assert!(
+        !s.eval::<bool>("return GameMenuButtonEditMode:IsVisible()")
+            .unwrap(),
+        "Edit Mode is hidden while MoveAnything is loaded"
+    );
+    assert_eq!(
+        s.eval::<(f64, f64)>("return GameMenuFrame:GetWidth(), GameMenuFrame:GetHeight()")
+            .unwrap(),
+        (200.0, 246.0),
+        "the compact six-rung menu size"
+    );
+    let (support_top, options_top) = s
+        .eval::<(f64, f64)>("return GameMenuButtonSupport:GetTop(), GameMenuButtonOptions:GetTop()")
+        .unwrap();
+    assert!((support_top - (options_top - 41.0)).abs() < 0.001);
+    assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
+}
+
 /// Support has nothing behind it and stays disabled (the pending idiom: grey label, `-Disabled`
-/// art, exactly how the era menu greys a dead entry). Edit Mode is live; everything else in the
-/// ladder is live. **Macros left this list in decision 0983**, when the macro window
-/// landed behind it. (AddOns had left it in 1197 and then left the ladder entirely with its
-/// panel — the char-select AddOns screen is the only addon UI.)
+/// art, exactly how the era menu greys a dead entry). Edit Mode remains available unless
+/// MoveAnything is loaded; everything else in the ladder is live. **Macros left this list in decision
+/// 0983**, when the macro window landed behind it. (AddOns had left it in 1197 and then left the
+/// ladder entirely with its panel — the char-select AddOns screen is the only addon UI.)
 #[test]
 fn the_unbacked_entries_are_disabled_and_the_rest_are_live() {
     let _data = benilla_formats::wow_data_or_skip!();
@@ -164,9 +198,13 @@ fn the_unbacked_entries_are_disabled_and_the_rest_are_live() {
             .unwrap(),
         "Support has no panel behind it and must read disabled"
     );
+    assert!(
+        s.eval::<bool>("return GameMenuButtonEditMode:IsEnabled() ~= 0")
+            .unwrap(),
+        "the built-in editor remains accessible when MoveAnything is not loaded"
+    );
     for name in [
         "GameMenuButtonOptions",
-        "GameMenuButtonEditMode",
         "GameMenuButtonMacros",
         "GameMenuButtonLogout",
         "GameMenuButtonQuit",
@@ -181,11 +219,6 @@ fn the_unbacked_entries_are_disabled_and_the_rest_are_live() {
 
     // Project-owned era labels use the options text catalog when it is loaded.
     // This partial harness without OptionsFrame keeps the English label.
-    assert_eq!(
-        s.eval::<String>("return GameMenuButtonEditMode:GetText()")
-            .unwrap(),
-        "Edit Mode"
-    );
     // Continue's label is the reference GlobalString; Options is project-owned.
     assert_eq!(
         s.eval::<String>("return GameMenuButtonContinue:GetText()")
@@ -200,7 +233,8 @@ fn the_unbacked_entries_are_disabled_and_the_rest_are_live() {
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
-/// Edit Mode opens its toolbar and the drag handle moves a core frame through the real pointer
+/// The built-in layout editor remains functional for direct callers even though its menu entry is
+/// omitted in favor of MoveAnything. The drag handle moves a core frame through the real pointer
 /// path. `userPlaced` is set by the same `StartMoving` gesture the layout cache persists.
 #[test]
 fn edit_mode_moves_a_core_frame_and_closes_cleanly() {
@@ -213,8 +247,7 @@ fn edit_mode_moves_a_core_frame_and_closes_cleanly() {
         PlayerFrame:SetWidth(200)
         PlayerFrame:SetHeight(80)
         BenillaEditMode_Initialize()
-        ShowUIPanel(GameMenuFrame)
-        GameMenuButtonEditMode:Click()
+        BenillaEditMode_Start()
         "#,
     )
     .unwrap();
@@ -236,8 +269,7 @@ fn edit_mode_moves_a_core_frame_and_closes_cleanly() {
         .unwrap();
     assert_eq!((left, bottom), (108.0, 108.0));
     assert!(
-        s.eval::<bool>("return PlayerFrame:IsUserPlaced()")
-            .unwrap(),
+        s.eval::<bool>("return PlayerFrame:IsUserPlaced()").unwrap(),
         "the moved frame is eligible for the existing layout cache"
     );
     assert!(s
