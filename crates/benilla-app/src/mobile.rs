@@ -74,39 +74,35 @@ fn update_mode(state: Res<State<ClientState>>, mut current: Local<Option<&'stati
         set_mode(mode);
         *current = Some(mode);
     }
+}
 
-    fn sync_hud_state(
-        selection: Res<Selection>,
-        self_player: Query<(Option<&Engaged>, Option<&ObjectStore>), With<SelfPlayer>>,
-        objects: Query<&ObjectStore>,
-        factions: Option<Res<Factions>>,
-        reputations: Res<Reputations>,
-        mut current: Local<Option<(bool, bool, bool, bool)>>,
-    ) {
-        let (in_combat, self_store) = self_player
-            .get_single()
-            .map_or((false, None), |(engaged, store)| (engaged.is_some(), store));
-        let has_target = selection.target.is_some() || selection.guid.is_some();
-        let target_store = selection.target.and_then(|entity| objects.get(entity).ok());
-        let can_attack = has_target
-            && crate::target::can_attack(
-                target_store,
-                factions.as_deref(),
-                &reputations,
-                self_store,
-            );
-        let can_interact = has_target
-            && crate::target::can_interact(
-                target_store,
-                factions.as_deref(),
-                &reputations,
-                self_store,
-            );
-        let next = (has_target, in_combat, can_attack, can_interact);
-        if *current != Some(next) {
-            set_hud_state_dom(has_target, in_combat, can_attack, can_interact);
-            *current = Some(next);
-        }
+fn sync_hud_state(
+    selection: Res<Selection>,
+    self_player: Query<(Option<&Engaged>, Option<&ObjectStore>), With<SelfPlayer>>,
+    objects: Query<&ObjectStore>,
+    factions: Option<Res<Factions>>,
+    reputations: Res<Reputations>,
+    mut current: Local<Option<(bool, bool, bool, bool)>>,
+) {
+    let (in_combat, self_store) = self_player
+        .iter()
+        .next()
+        .map_or((false, None), |(engaged, store)| (engaged.is_some(), store));
+    let has_target = selection.target.is_some() || selection.guid.is_some();
+    let target_store = selection.target.and_then(|entity| objects.get(entity).ok());
+    let can_attack = has_target
+        && crate::target::can_attack(target_store, factions.as_deref(), &reputations, self_store);
+    let can_interact = has_target
+        && crate::target::can_interact(
+            target_store,
+            factions.as_deref(),
+            &reputations,
+            self_store,
+        );
+    let next = (has_target, in_combat, can_attack, can_interact);
+    if *current != Some(next) {
+        set_hud_state_dom(has_target, in_combat, can_attack, can_interact);
+        *current = Some(next);
     }
 }
 
