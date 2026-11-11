@@ -11,7 +11,18 @@ export function openAccountsPage(url) {
     return window.open(url, '_blank', 'noopener,noreferrer') !== null;
 }
 export function openLocalAddonsPage() {
-    return window.open('/addons.html', '_blank', 'noopener,noreferrer') !== null;
+    const width = Math.min(900, window.screen.availWidth || 900);
+    const height = Math.min(760, window.screen.availHeight || 760);
+    const left = Math.max(0, Math.round((window.screen.availWidth - width) / 2));
+    const top = Math.max(0, Math.round((window.screen.availHeight - height) / 2));
+    const popup = window.open(
+        '/addons.html',
+        'benilla-local-addons',
+        `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+    if (!popup) return false;
+    popup.focus();
+    return true;
 }
 "#)]
 extern "C" {
@@ -36,8 +47,8 @@ pub(crate) fn active_locale() -> String {
 pub(crate) fn text(key: &str) -> String {
     let dictionary = js_sys::Reflect::get(&js_sys::global(), &"BENILLA_I18N".into())
         .expect("reading BENILLA_I18N");
-    let function = js_sys::Reflect::get(&dictionary, &"text".into())
-        .expect("reading BENILLA_I18N.text");
+    let function =
+        js_sys::Reflect::get(&dictionary, &"text".into()).expect("reading BENILLA_I18N.text");
     use wasm_bindgen::JsCast;
     function
         .unchecked_into::<js_sys::Function>()

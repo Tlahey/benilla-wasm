@@ -4635,6 +4635,14 @@ fn addon_options_stage_bulk_changes_until_apply_or_cancel() {
     assert!(s
         .eval::<bool>("return BenillaOptionsAddOnRow1Check:GetChecked()")
         .unwrap());
+    assert!(s
+        .eval::<bool>("return BenillaOptionsAddOnRow1:IsVisible()")
+        .unwrap());
+    assert_eq!(
+        s.eval::<String>("return BenillaOptionsAddOnRow1Label:GetText()")
+            .unwrap(),
+        "Alpha"
+    );
     assert!(!s
         .eval::<bool>("return BenillaOptionsAddOnRow2Check:GetChecked()")
         .unwrap());

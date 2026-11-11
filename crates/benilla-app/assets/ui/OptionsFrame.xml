@@ -2809,15 +2809,15 @@
                         </Scripts>
                     </Button>
                     <!-- Add local (new): the AddOns page's one action. Opens the browser-local
-                         store page in a new tab; the worker merges it on the next reload. -->
-                    <Button name="$parentAddOnsAdd" inherits="OptionsRedButtonTemplate" text="Ajouter localement" hidden="true">
+                         store in a popup; the worker merges it on the next reload. -->
+                    <Button name="$parentAddOnsAdd" inherits="OptionsRedButtonTemplate" text="Importer un addon" hidden="true">
                         <Size><AbsDimension x="150" y="22"/></Size>
                         <Anchors><Anchor point="TOPRIGHT"><Offset><AbsDimension x="-36" y="-16"/></Offset></Anchor></Anchors>
                         <Scripts>
                             <OnClick>
                                 if OpenLocalAddonsPage and OpenLocalAddonsPage() then
                                 else
-                                    ChatFrame1:AddMessage("Add-ons locaux : ouvrez /addons.html dans un nouvel onglet.", 1, 1, 1)
+                                    ChatFrame1:AddMessage("Add-ons locaux : ouvrez /addons.html dans une fenêtre séparée.", 1, 1, 1)
                                 end
                             </OnClick>
                         </Scripts>
@@ -2916,6 +2916,8 @@
                                     <Anchors>
                                         <Anchor point="TOPLEFT"/>
                                         <Anchor point="TOPRIGHT"/>
+                                        <Anchor point="BOTTOMLEFT"/>
+                                        <Anchor point="BOTTOMRIGHT"/>
                                     </Anchors>
                                     <Layers>
                                         <Layer level="OVERLAY">
