@@ -8,6 +8,11 @@
 !third_party/**
 !deploy/
 !deploy/**
-**/target/
+!web/
+!web/**
+/target/
+third_party/rilua/target/
+web/pkg-full/
+web/pkg-audio/
 **/.git/
 **/tests/fixtures/

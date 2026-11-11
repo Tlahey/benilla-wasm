@@ -442,6 +442,13 @@ fn run_warm_pass(
         despawn_rigs(&mut commands, &rigs);
         return;
     }
+    // The full variant cross can exhaust a phone's graphics memory at world entry.
+    // Compile variants on demand there instead; larger displays keep the warm pass.
+    #[cfg(target_arch = "wasm32")]
+    if crate::mobile::is_small_touch_screen() {
+        warm.done = true;
+        return;
+    }
     // Captures boot straight in-world, deterministic by construction — no menagerie in a shot.
     if benilla_world::dev_state::deterministic_run() {
         warm.done = true;

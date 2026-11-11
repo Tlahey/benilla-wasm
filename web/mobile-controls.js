@@ -26,8 +26,12 @@ export function actionVisibility(hud = {}) {
   };
 }
 
-export function shouldForwardTouchPointer(touchEnabled, mode, pointerType) {
-  return touchEnabled && (mode === 'login' || mode === 'game') && pointerType === 'touch';
+export function shouldForwardTouchPointer(touchEnabled, pointerType) {
+  return touchEnabled && pointerType === 'touch';
+}
+
+export function isSmallTouchScreen(touchEnabled, width, height) {
+  return touchEnabled && Math.min(width, height) <= 600;
 }
 
 function installMobileControls() {
@@ -455,21 +459,25 @@ function installMobileControls() {
       pointerId: 10000 + event.pointerId,
       pointerType: 'mouse',
       isPrimary: true,
-      button: type === 'pointerdown' ? 0 : -1,
+      button: type === 'pointermove' ? -1 : 0,
       buttons,
       clientX: event.clientX,
       clientY: event.clientY,
       bubbles: true,
       cancelable: true,
     });
+    if (type === 'pointermove' && typeof synthetic.getCoalescedEvents === 'function') {
+      Object.defineProperty(synthetic, 'getCoalescedEvents', { value: () => [synthetic] });
+    }
     canvas.dispatchEvent(synthetic);
   }
   canvas.addEventListener('pointerdown', event => {
-    if (!shouldForwardTouchPointer(isTouch(), mode, event.pointerType)) return;
+    if (!shouldForwardTouchPointer(isTouch(), event.pointerType)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     mouseLikePointers.set(event.pointerId, true);
     canvas.setPointerCapture(event.pointerId);
+    forwardTouchPointer('pointermove', event, 0);
     forwardTouchPointer('pointerdown', event, 1);
   }, true);
   canvas.addEventListener('pointermove', event => {
@@ -487,6 +495,7 @@ function installMobileControls() {
   canvas.addEventListener('pointerup', event => finishTouchPointer('pointerup', event), true);
   canvas.addEventListener('pointercancel', event => finishTouchPointer('pointerup', event), true);
   function releaseAll() {
+    joystickPointer = null;
     for (const key of [...pressedKeys]) {
       const [name, code] = key.split(':');
       setPressedKey(name, code, false);
@@ -498,16 +507,16 @@ function installMobileControls() {
     if (document.hidden) releaseAll();
   });
 
-  function setMode(nextMode) {
+  function setMode(nextMode, covered = false) {
     mode = nextMode;
-    const visible = mode === 'game' && isTouch();
+    const visible = mode === 'game' && !covered && isTouch();
     controlRoot.dataset.visible = String(visible);
     if (mode !== 'login') {
       if (loginInput.contains(document.activeElement)) document.activeElement.blur();
     }
     updateLoginPosition();
     applyHudVisibility();
-    if (mode !== 'game') releaseAll();
+    if (!visible) releaseAll();
   }
 
   function syncLogin(accountText, passwordText, enabled) {
@@ -523,6 +532,7 @@ function installMobileControls() {
 
   globalThis.BENILLA_MOBILE = Object.freeze({
     isTouch,
+    isSmallTouchScreen: () => isSmallTouchScreen(isTouch(), screen.width, screen.height),
     setMode,
     loginAccount: () => account.value,
     loginPassword: () => password.value,

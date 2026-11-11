@@ -7,11 +7,14 @@ use crate::net::{ObjectStore, Reputations, SelfPlayer};
 use crate::target::{Factions, Selection};
 
 #[wasm_bindgen(inline_js = r#"
-export function benillaMobileSetMode(mode) {
-    globalThis.BENILLA_MOBILE?.setMode(mode);
+export function benillaMobileSetMode(mode, covered) {
+    globalThis.BENILLA_MOBILE?.setMode(mode, covered);
 }
 export function benillaMobileIsTouch() {
     return globalThis.BENILLA_MOBILE?.isTouch() ?? false;
+}
+export function benillaMobileIsSmallTouchScreen() {
+    return globalThis.BENILLA_MOBILE?.isSmallTouchScreen() ?? false;
 }
 export function benillaMobileLoginAccount() {
     return globalThis.BENILLA_MOBILE?.loginAccount() ?? "";
@@ -39,9 +42,11 @@ export function benillaMobileSetHudState(hasTarget, inCombat, canAttack, canInte
 "#)]
 extern "C" {
     #[wasm_bindgen(js_name = benillaMobileSetMode)]
-    fn set_mode(mode: &str);
+    fn set_mode(mode: &str, covered: bool);
     #[wasm_bindgen(js_name = benillaMobileIsTouch)]
     fn is_touch() -> bool;
+    #[wasm_bindgen(js_name = benillaMobileIsSmallTouchScreen)]
+    pub(crate) fn is_small_touch_screen() -> bool;
     #[wasm_bindgen(js_name = benillaMobileLoginAccount)]
     fn login_account() -> String;
     #[wasm_bindgen(js_name = benillaMobileLoginPassword)]
@@ -60,19 +65,28 @@ pub(crate) struct MobileControlsPlugin;
 
 impl Plugin for MobileControlsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (update_mode, sync_hud_state));
+        app.add_systems(
+            Update,
+            update_mode.after(benilla_world::schedule::WorldStage::Present),
+        )
+        .add_systems(Update, sync_hud_state);
     }
 }
 
-fn update_mode(state: Res<State<ClientState>>, mut current: Local<Option<&'static str>>) {
+fn update_mode(
+    state: Res<State<ClientState>>,
+    loading: Res<crate::loading_screen::LoadingScreen>,
+    mut current: Local<Option<(&'static str, bool)>>,
+) {
     let mode = match state.get() {
         ClientState::Login => "login",
         ClientState::InWorld => "game",
         _ => "off",
     };
-    if *current != Some(mode) {
-        set_mode(mode);
-        *current = Some(mode);
+    let next = (mode, loading.covering());
+    if *current != Some(next) {
+        set_mode(next.0, next.1);
+        *current = Some(next);
     }
 }
 
@@ -93,12 +107,7 @@ fn sync_hud_state(
     let can_attack = has_target
         && crate::target::can_attack(target_store, factions.as_deref(), &reputations, self_store);
     let can_interact = has_target
-        && crate::target::can_interact(
-            target_store,
-            factions.as_deref(),
-            &reputations,
-            self_store,
-        );
+        && crate::target::can_interact(target_store, factions.as_deref(), &reputations, self_store);
     let next = (has_target, in_combat, can_attack, can_interact);
     if *current != Some(next) {
         set_hud_state_dom(has_target, in_combat, can_attack, can_interact);
