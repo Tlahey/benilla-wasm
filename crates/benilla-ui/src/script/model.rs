@@ -132,6 +132,9 @@ pub(crate) struct Model {
     /// answers `MISSING`.
     pub(crate) addons_chain_reader: Option<super::addon::SharedChainReader>,
     pub(crate) addons_loose_reader: Option<super::addon::SharedChainReader>,
+    /// The host's browser opener for the local addon page (the in-game Options AddOns page's
+    /// "Ajouter localement" button). `None` on native or in a VM with no browser host.
+    pub(crate) local_addons_opener: Option<Box<dyn Fn() -> bool + Send + Sync>>,
     /// The host's font engine ([`super::UiScript::set_text_measurer`]) — what lets a metric read
     /// answer inside the Lua call that asked, instead of a frame later. `None` in every VM without
     /// a font atlas, which is the measure round-trip's own world and behaves exactly as it did.
@@ -1966,6 +1969,7 @@ impl Model {
             addons_root: None,
             addons_chain_reader: None,
             addons_loose_reader: None,
+            local_addons_opener: None,
             measurer: None,
             texture_probe: None,
             texture_size_probe: None,

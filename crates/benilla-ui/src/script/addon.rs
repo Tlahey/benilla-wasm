@@ -310,6 +310,51 @@ pub(super) fn install(vm: &mut Vm) -> benilla_lua::Result<()> {
             .len())
     })?;
 
+    // `BenillaGetNumAddOns()` / `BenillaGetAddOnInfo(i)` — the Options AddOns page's source.
+    // vMangos never sends `SMSG_ADDON_INFO`, so the reference's `addon_index` is empty and
+    // `GetNumAddOns` answers 0 even though the host discovered and loaded the addons. These two
+    // read the host registry (minus the chain's `Blizzard_*` interface addons) in load order.
+    vm.register_function("BenillaGetNumAddOns", |lua, ()| {
+        let model = lua.app_data_ref::<Model>().expect("model");
+        Ok(model.addons.iter().filter(|a| !a.chain).count())
+    })?;
+    vm.register_function("BenillaGetAddOnInfo", |lua, index: u32| {
+        let model = lua.app_data_ref::<Model>().expect("model");
+        let rows: Vec<usize> = model
+            .addons
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| !a.chain)
+            .map(|(i, _)| i)
+            .collect();
+        let Some(&i) = index
+            .checked_sub(1)
+            .and_then(|index| rows.get(index as usize))
+        else {
+            return Ok(MultiValue::from(vec![
+                Value::Nil,
+                Value::Nil,
+                Value::Nil,
+                Value::Nil,
+                Value::Nil,
+                Value::Nil,
+            ]));
+        };
+        let reason = verdict(&model, i).token();
+        let a = &model.addons[i];
+        Ok(MultiValue::from(vec![
+            lua_str(&a.name),
+            opt_str(&a.title),
+            opt_str(&a.notes),
+            neutral_flag(a.enabled),
+            neutral_flag(reason.is_none()),
+            match &reason {
+                Some(r) => lua_str(r),
+                None => Value::Nil,
+            },
+        ]))
+    })?;
+
     // `name, title, notes, enabled, loadable, reason, security` — SEVEN values, and slot 4 is
     // **`enabled`**, not `url`.
     //

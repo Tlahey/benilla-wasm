@@ -101,6 +101,16 @@ pub(super) fn install(lua: &mut Vm) -> benilla_lua::Result<()> {
         Ok(())
     })?;
 
+    // `OpenLocalAddonsPage()` — the in-game Options AddOns page's "Ajouter localement" button.
+    // The host supplies the browser opener; a native/test VM has no host and answers false.
+    lua.register_function("OpenLocalAddonsPage", |lua, ()| {
+        let model = lua.app_data_ref::<Model>().expect("model app_data");
+        Ok(match &model.local_addons_opener {
+            Some(opener) => opener(),
+            None => false,
+        })
+    })?;
+
     // **`FrameXML_Debug([v])` — the XML loader's own trace switch, get-or-set** (decision 2160,
     // wow-re `ui/scratch/framexml-debug-trace-flag.md`). `0x488440` reads the global `[0xceea30]`
     // through `0x6edb40`, and:
@@ -338,6 +348,15 @@ impl super::UiScript {
     /// clock, and a number an addon polls every `OnUpdate` should not be re-derived per call.
     pub fn set_framerate(&mut self, fps: f64) {
         self.model_mut().framerate = fps;
+    }
+}
+
+impl super::UiScript {
+    /// Install the host's browser opener for the local addon page. The Options AddOns page's
+    /// "Ajouter localement" button calls the Lua global of the same name; on a VM with no host
+    /// the global answers `false`, which the button renders as its short fallback message.
+    pub fn set_local_addons_opener(&mut self, opener: Box<dyn Fn() -> bool + Send + Sync>) {
+        self.model_mut().local_addons_opener = Some(opener);
     }
 }
 

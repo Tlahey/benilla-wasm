@@ -4567,6 +4567,39 @@ fn the_two_option_tabs_fit_their_labels_at_the_drawn_scale() {
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
+#[test]
+fn the_addons_tab_switches_from_game_settings_and_shows_the_local_installer() {
+    let mut s = harness();
+    s.run("ShowUIPanel(BenillaOptionsFrame) BenillaOptionsFrameAddOnsTab:Click()")
+        .unwrap();
+
+    assert_eq!(
+        s.eval::<String>("return BenillaOptionsFrame.selectedCategory")
+            .unwrap(),
+        "AddOns"
+    );
+    assert!(s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOns:IsVisible()")
+        .unwrap());
+    assert!(s
+        .eval::<bool>("return BenillaOptionsFrameContainerAddOnsAdd:IsVisible()")
+        .unwrap());
+    assert_eq!(
+        s.eval::<String>("return BenillaOptionsFrameContainerTitle:GetText()")
+            .unwrap(),
+        "AddOns (0)"
+    );
+
+    s.run("BenillaOptionsFrameGameTab:Click()").unwrap();
+    assert!(!s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOns:IsVisible()")
+        .unwrap());
+    assert!(s
+        .eval::<bool>("return BenillaOptionsFrameCategoryList:IsVisible()")
+        .unwrap());
+    assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
+}
+
 /// The falsifier: **with no measurer installed**, the same one-shot measures 0 and each tab comes
 /// out 40 wide — the law's padding and nothing else. That is the engine-less truth (`benilla-ui`
 /// `script/measure.rs`: absent is a supported state, metrics stay 0 until the host's batch

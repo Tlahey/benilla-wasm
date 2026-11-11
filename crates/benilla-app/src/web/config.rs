@@ -10,12 +10,17 @@ export function openAccountsPage(url) {
     if (!url) return false;
     return window.open(url, '_blank', 'noopener,noreferrer') !== null;
 }
+export function openLocalAddonsPage() {
+    return window.open('/addons.html', '_blank', 'noopener,noreferrer') !== null;
+}
 "#)]
 extern "C" {
     #[wasm_bindgen(js_name = hideBootstrapStatus)]
     pub(crate) fn hide_bootstrap_status();
     #[wasm_bindgen(js_name = openAccountsPage)]
     pub(crate) fn open_accounts_page(url: &str) -> bool;
+    #[wasm_bindgen(js_name = openLocalAddonsPage)]
+    pub(crate) fn open_local_addons_page() -> bool;
 }
 
 pub(crate) fn active_locale() -> String {

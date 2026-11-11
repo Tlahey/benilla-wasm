@@ -454,6 +454,160 @@
             tab:SetWidth(getglobal(tab:GetName() .. "Text"):GetStringWidth() + 40)
         end
 
+        -- ── The AddOns tab (new): the 1.15 era SettingsPanel's addon page was never ported;
+        -- this is the runtime registry (baseline + browser-local), not the glue folder walk.
+        -- Rows are created once per index and reused; EnableAddOn/DisableAddOn write the live
+        -- registry, which the logout tail persists to the per-character state file.
+        OPTIONS_ADDON_POOL = {}
+
+        -- Swap the two era tab plates (MinimalTabMixin: active = white small text at BOTTOM+6,
+        -- inactive = gold small at BOTTOM+4; the 1.12 plate pair flipped via TexCoords, exactly
+        -- as the XML authored it).
+        function OptionsTab_SetState(prefix, selected)
+            local plate = getglobal("BenillaOptionsFrame" .. prefix .. "Plate")
+            local text = getglobal("BenillaOptionsFrame" .. prefix .. "Text")
+            if not plate or not text then return end
+            if selected then
+                plate:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab")
+                plate:SetHeight(26)
+                text:SetPoint("BOTTOM", 0, 6)
+                text:SetFontObject("GameFontHighlightSmall")
+            else
+                plate:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
+                plate:SetHeight(23)
+                text:SetPoint("BOTTOM", 0, 4)
+                text:SetFontObject("GameFontNormalSmall")
+            end
+            plate:SetTexCoord(0, 1, 1, 0)
+        end
+
+        -- Back to the CVar pages: restore the category list, the search box and Defaults.
+        function OptionsGameTab_OnClick()
+            OptionsTab_SetState("Game", true)
+            OptionsTab_SetState("AddOns", false)
+            local addonsPage = getglobal("BenillaOptionsFrameContainerBodyAddOns")
+            if addonsPage then addonsPage:Hide() end
+            local addLocal = getglobal("BenillaOptionsFrameContainerAddOnsAdd")
+            if addLocal then addLocal:Hide() end
+            local defaults = getglobal("BenillaOptionsFrameContainerDefaults")
+            if defaults then defaults:Show() end
+            BenillaOptionsFrameSearchBox:Show()
+            BenillaOptionsFrame_SelectCategory(BenillaOptionsFrame.lastGameCategory or "Controls")
+        end
+
+        -- The AddOns page: hide every CVar body, show the addon list, swap the tab plates,
+        -- hide the search box and Defaults; the "Ajouter" button opens the local store page.
+        function OptionsAddOnsTab_OnClick()
+            OptionsTab_SetState("Game", false)
+            OptionsTab_SetState("AddOns", true)
+            BenillaOptionsFrame.selectedCategory = "AddOns"
+            BenillaOptionsFrameCategoryBox:Hide()
+            BenillaOptionsFrameCategoryList:Hide()
+            BenillaOptionsFrameContainer:ClearAllPoints()
+            BenillaOptionsFrameContainer:SetPoint("TOPLEFT", BenillaOptionsFrame, "TOPLEFT", 10, -52)
+            BenillaOptionsFrameContainer:SetPoint("BOTTOMRIGHT", BenillaOptionsFrame, "BOTTOMRIGHT", -14, 39)
+            for k in pairs(OPTIONS_PAGE_ROWS) do
+                local body = getglobal("BenillaOptionsFrameContainerBody" .. k)
+                if body then body:Hide() end
+            end
+            getglobal("BenillaOptionsFrameContainerBodyKeybindings"):Hide()
+            local addonsPage = getglobal("BenillaOptionsFrameContainerBodyAddOns")
+            addonsPage:Show()
+            BenillaOptionsFrameContainerTitle:SetText("AddOns")
+            BenillaOptionsFrameContainerDefaults:Hide()
+            BenillaOptionsFrameContainerUnbind:Hide()
+            BenillaOptionsFrameContainerAddOnsAdd:Show()
+            BenillaOptionsFrameSearchBox:Hide()
+            OptionsAddOns_Refresh()
+        end
+
+        -- Paint one row from the in-game `GetAddOnInfo` shape (name, title, notes, enabled,
+        -- loadable, reason). `enabled` is 1 or nil, never boolean true.
+        function OptionsAddOns_UpdateRow(row, i)
+            -- vMangos sends no SMSG_ADDON_INFO, so `GetNumAddOns`/`GetAddOnInfo(index)` are empty;
+            -- the host registry verbs carry the discovered addons (baseline + local). Fall back if
+            -- an older build lacks them.
+            local info = BenillaGetAddOnInfo or GetAddOnInfo
+            local name, title, _, enabled, loadable, reason = info(i)
+            if not name then return end
+            row.addonName = name
+            row.index = i
+            local label = getglobal(row:GetName() .. "Label")
+            label:SetText(title or name)
+            local check = getglobal(row:GetName() .. "Check")
+            check:SetChecked(enabled and true or false)
+            local status = getglobal(row:GetName() .. "Status")
+            if reason then
+                local token = getglobal("ADDON_" .. reason)
+                status:SetText(token or reason)
+            else
+                status:SetText("")
+            end
+        end
+
+        function OptionsAddOnRow_OnClick(check)
+            local row = check:GetParent()
+            if not row.addonName then return end
+            if check:GetChecked() then
+                EnableAddOn(row.addonName)
+            else
+                DisableAddOn(row.addonName)
+            end
+            OptionsAddOns_UpdateRow(row, row.index)
+        end
+
+        function OptionsAddOnRow_Hover(row, on)
+            local hover = getglobal(row:GetName() .. "Hover")
+            if on then
+                hover:Show()
+                GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+                GameTooltip:SetText(row.addonName)
+                local notes = select(3, GetAddOnInfo(row.addonName))
+                if notes then GameTooltip:AddLine(notes, 1, 1, 1, true) end
+                GameTooltip:Show()
+            else
+                hover:Hide()
+                GameTooltip:Hide()
+            end
+        end
+
+        -- Build/reuse the rows in registry order, chained at the era's (0,-9) pitch. The pool
+        -- shrinks to the visible count; an index the library no longer has is hidden.
+        function OptionsAddOns_Refresh()
+            local body = getglobal("BenillaOptionsFrameContainerBodyAddOns")
+            local count = BenillaGetNumAddOns or GetNumAddOns
+            local n = count()
+            local empty = getglobal("BenillaOptionsFrameContainerBodyAddOnsEmpty")
+            if empty then
+                if n == 0 then empty:Show() else empty:Hide() end
+            end
+            BenillaOptionsFrameContainerTitle:SetText("AddOns (" .. n .. ")")
+            for i = n + 1, table.getn(OPTIONS_ADDON_POOL) do
+                OPTIONS_ADDON_POOL[i]:Hide()
+            end
+            local prev = nil
+            for i = 1, n do
+                local row = OPTIONS_ADDON_POOL[i]
+                if not row then
+                    row = CreateFrame("Frame", "BenillaOptionsAddOnRow" .. i, body, "OptionsAddOnRowTemplate")
+                    OPTIONS_ADDON_POOL[i] = row
+                end
+                OptionsAddOns_UpdateRow(row, i)
+                row:ClearAllPoints()
+                if prev then
+                    row:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -9)
+                    row:SetPoint("TOPRIGHT", prev, "BOTTOMRIGHT", 0, -9)
+                else
+                    row:SetPoint("TOPLEFT", body, "TOPLEFT", 10, -12)
+                    row:SetPoint("TOPRIGHT", body, "TOPRIGHT", -20, -12)
+                end
+                row:Show()
+                prev = row
+            end
+            BenillaOptionsFrameContainerScroll:SetVerticalScroll(0)
+        end
+
+
         -- Each row's OnLoad: remember the key + title, paint the label, size the wash plate —
         -- the era sized it via SetAtlas(name, true) at atlas size (187x21, centered: 6 units
         -- in from either edge of the 199 row); with plain SetTexture the size is authored
@@ -485,6 +639,19 @@
         -- empty, Defaults disabled.
         function BenillaOptionsFrame_SelectCategory(key)
             BenillaOptionsFrame.selectedCategory = key
+            BenillaOptionsFrame.lastGameCategory = key
+            BenillaOptionsFrameCategoryBox:Show()
+            BenillaOptionsFrameCategoryList:Show()
+            BenillaOptionsFrameContainer:ClearAllPoints()
+            BenillaOptionsFrameContainer:SetPoint("TOPLEFT", BenillaOptionsFrameCategoryList, "TOPRIGHT", 16, 0)
+            BenillaOptionsFrameContainer:SetPoint("BOTTOMRIGHT", BenillaOptionsFrame, "BOTTOMRIGHT", -22, 47)
+            OptionsTab_SetState("Game", true)
+            OptionsTab_SetState("AddOns", false)
+            local addonsPage = getglobal("BenillaOptionsFrameContainerBodyAddOns")
+            if addonsPage then addonsPage:Hide() end
+            BenillaOptionsFrameContainerAddOnsAdd:Hide()
+            BenillaOptionsFrameContainerDefaults:Show()
+            BenillaOptionsFrameSearchBox:Show()
             if BenillaOptionsFrameSearchBox:GetText() ~= "" then
                 BenillaOptionsFrameSearchBox:SetText("")
                 return -- the OnTextChanged restore re-entered with this same key and finished
@@ -655,6 +822,11 @@
             take("BenillaOptionsFrameContainerBodySearchHeadKeybindings")
             for i = 1, KEYBINDINGS_SEARCH_ROWS do
                 take("BenillaOptionsFrameContainerBodyKeybindSearch" .. i)
+            end
+            -- The AddOns page rows join the same extent set: they hang off the body's TOP and
+            -- only the visible page's rows count (IsVisible covers the hidden AddOns body).
+            for _, row in ipairs(OPTIONS_ADDON_POOL) do
+                take(row:GetName())
             end
             return bottom
         end
@@ -1967,6 +2139,54 @@
         </Scripts>
     </Button>
 
+    <!-- One ADDON row (new): the era addon row is the same 26-tall strip; the 1.12
+         UI-CheckBox art sits at the era control seat, the label at the shared (37) inset, and
+         the status token (ADDON_<reason>) rides at the right. Hover wash + tooltip on the row. -->
+    <Frame name="OptionsAddOnRowTemplate" virtual="true" enableMouse="true">
+        <Size><AbsDimension y="26"/></Size>
+        <Layers>
+            <Layer level="BACKGROUND">
+                <Texture name="$parentHover" hidden="true">
+                    <Anchors>
+                        <Anchor point="TOPLEFT"><Offset><AbsDimension x="-10" y="0"/></Offset></Anchor>
+                        <Anchor point="BOTTOMRIGHT"><Offset><AbsDimension x="-5" y="0"/></Offset></Anchor>
+                    </Anchors>
+                    <Color r="1" g="1" b="1" a="0.1"/>
+                </Texture>
+            </Layer>
+            <Layer level="OVERLAY">
+                <FontString name="$parentLabel" inherits="GameFontNormal" justifyH="LEFT">
+                    <Anchors>
+                        <Anchor point="LEFT"><Offset><AbsDimension x="37" y="0"/></Offset></Anchor>
+                        <Anchor point="RIGHT" relativePoint="CENTER"><Offset><AbsDimension x="-85" y="0"/></Offset></Anchor>
+                    </Anchors>
+                </FontString>
+                <FontString name="$parentStatus" inherits="GameFontNormalSmall" justifyH="RIGHT">
+                    <Anchors>
+                        <Anchor point="RIGHT"><Offset><AbsDimension x="-30" y="0"/></Offset></Anchor>
+                    </Anchors>
+                </FontString>
+            </Layer>
+        </Layers>
+        <Frames>
+            <CheckButton name="$parentCheck">
+                <Size><AbsDimension x="30" y="29"/></Size>
+                <Anchors><Anchor point="LEFT" relativePoint="CENTER"><Offset><AbsDimension x="-80" y="0"/></Offset></Anchor></Anchors>
+                <NormalTexture file="Interface\Buttons\UI-CheckBox-Up"/>
+                <PushedTexture file="Interface\Buttons\UI-CheckBox-Down"/>
+                <CheckedTexture file="Interface\Buttons\UI-CheckBox-Check"/>
+                <DisabledCheckedTexture file="Interface\Buttons\UI-CheckBox-Check-Disabled"/>
+                <Scripts>
+                    <OnClick>OptionsAddOnRow_OnClick(this)</OnClick>
+                </Scripts>
+            </CheckButton>
+        </Frames>
+        <Scripts>
+            <OnEnter>OptionsAddOnRow_Hover(this, 1)</OnEnter>
+            <OnLeave>OptionsAddOnRow_Hover(this, nil)</OnLeave>
+        </Scripts>
+    </Frame>
+
     <!-- One SETTING row, checkbox flavor (era SettingsCheckboxControlTemplate over
          SettingsListElementTemplate, Blizzard_SettingControls.xml l.50-112): 26 tall, stretched
          to the page width by its instance anchors; label GameFontNormal in a LEFT(37) →
@@ -2343,6 +2563,7 @@
                 <DisabledFont inherits="GameFontHighlightSmall"/>
                 <Scripts>
                     <OnShow>OptionsTab_FitWidth(self)</OnShow>
+                    <OnClick>OptionsGameTab_OnClick(self)</OnClick>
                 </Scripts>
             </Button>
             <Button name="$parentAddOnsTab">
@@ -2368,11 +2589,12 @@
                 <NormalFont inherits="GameFontNormalSmall"/>
                 <HighlightFont inherits="GameFontNormalSmall"/>
                 <DisabledFont inherits="GameFontNormalSmall"/>
-                <!-- No addon list behind it: dead to clicks, but wearing the era's unselected
-                     GOLD (not disabled grey) — the director's capture is the call. -->
+                <!-- The addon page is the runtime registry (baseline + browser-local). The
+                     unselected gold plate is the authored initial state; OptionsTab_SetState
+                     swaps both plates when the tab is pressed. -->
                 <Scripts>
-                    <OnLoad>self:Disable()</OnLoad>
                     <OnShow>OptionsTab_FitWidth(self)</OnShow>
+                    <OnClick>OptionsAddOnsTab_OnClick(self)</OnClick>
                 </Scripts>
             </Button>
 
@@ -2493,6 +2715,20 @@
                             </OnClick>
                         </Scripts>
                     </Button>
+                    <!-- Add local (new): the AddOns page's one action. Opens the browser-local
+                         store page in a new tab; the worker merges it on the next reload. -->
+                    <Button name="$parentAddOnsAdd" inherits="OptionsRedButtonTemplate" text="Ajouter localement" hidden="true">
+                        <Size><AbsDimension x="150" y="22"/></Size>
+                        <Anchors><Anchor point="TOPRIGHT"><Offset><AbsDimension x="-36" y="-16"/></Offset></Anchor></Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if OpenLocalAddonsPage and OpenLocalAddonsPage() then
+                                else
+                                    ChatFrame1:AddMessage("Add-ons locaux : ouvrez /addons.html dans un nouvel onglet.", 1, 1, 1)
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
                     <!-- Unbind Key (1.12's own button, reseated in the header band): exists only
                          on the Keybindings page, live only while a capsule is selected
                          (KeyBindings_UpdateUnbindKey drives the enable). -->
@@ -2581,6 +2817,21 @@
                                 </Layer>
                             </Layers>
                             <Frames>
+                                <!-- The AddOns page (new): no XML rows — OptionsAddOns_Refresh
+                                     creates/reuses the runtime registry rows under this frame. -->
+                                <Frame name="$parentAddOns" hidden="true">
+                                    <Anchors>
+                                        <Anchor point="TOPLEFT"/>
+                                        <Anchor point="TOPRIGHT"/>
+                                    </Anchors>
+                                    <Layers>
+                                        <Layer level="OVERLAY">
+                                            <FontString name="$parentEmpty" inherits="GameFontHighlightLarge" justifyH="LEFT" text="Aucun addon installé.">
+                                                <Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="17" y="-28"/></Offset></Anchor></Anchors>
+                                            </FontString>
+                                        </Layer>
+                                    </Layers>
+                                </Frame>
                                 <!-- The Controls page (0961): the gameplay checkboxes with benilla
                                      knobs behind them, in the era Controls page's own row order
                                      (Controls.lua @1.15.9: Sticky Targeting #1, Auto Loot #6,

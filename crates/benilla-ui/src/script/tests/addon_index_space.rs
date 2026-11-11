@@ -38,6 +38,48 @@ fn seeded() -> UiScript {
     s
 }
 
+#[test]
+fn options_registry_view_includes_loose_addons_before_the_server_reply() {
+    let mut s = UiScript::new().unwrap();
+    let chain = AddOnInfo {
+        name: "Blizzard_Chain".into(),
+        title: Some("Blizzard Chain".into()),
+        interface: 11200,
+        enabled: true,
+        chain: true,
+        ..Default::default()
+    };
+    s.register_addons(
+        vec![
+            AddOnInfo {
+                name: "LooseAddon".into(),
+                title: Some("Loose Addon".into()),
+                interface: 11200,
+                enabled: true,
+                loaded: true,
+                ..Default::default()
+            },
+            chain,
+        ],
+        None,
+        None,
+        None,
+    );
+
+    assert_eq!(s.eval::<i64>("return GetNumAddOns()").ok(), Some(0));
+    assert_eq!(s.eval::<i64>("return BenillaGetNumAddOns()").ok(), Some(1));
+    assert!(s
+        .eval::<bool>(
+            "local name, title, notes, enabled, loadable, reason = BenillaGetAddOnInfo(1) \
+             return name == 'LooseAddon' and title == 'Loose Addon' \
+               and enabled == 1 and loadable == 1 and reason == nil"
+        )
+        .unwrap());
+    assert!(s
+        .eval::<bool>("return BenillaGetAddOnInfo(0) == nil")
+        .unwrap());
+}
+
 /// The names `GetAddOnInfo(i)` answers, in index order.
 fn by_index(s: &mut UiScript) -> Vec<String> {
     s.eval_sequence::<String>(
