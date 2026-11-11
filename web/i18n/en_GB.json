@@ -30,5 +30,13 @@
   "login.account_page_blocked": "The account page could not be opened (check popup blocking).",
   "login.account_not_configured": "Account creation is not configured for this server.",
   "login.password_invalid": "Password must contain 1–16 printable ASCII characters (Latin letters, digits or symbols). Please check your keyboard layout.",
-  "login.save_locale_failed": "Could not save language preference."
+  "login.save_locale_failed": "Could not save language preference.",
+  "addons.dialog_title": "Local Add-ons",
+  "addons.close": "Close",
+  "mobile.account": "Account name",
+  "mobile.password": "Password",
+  "mobile.movement": "Movement",
+  "mobile.jump": "Jump",
+  "mobile.auto_run": "Toggle auto-run",
+  "mobile.target": "Target nearest enemy"
 }

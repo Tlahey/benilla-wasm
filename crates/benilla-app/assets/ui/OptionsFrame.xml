@@ -2778,8 +2778,8 @@
                             </OnClick>
                         </Scripts>
                     </Button>
-                    <!-- Add local (new): the AddOns page's one action. Opens the browser-local
-                         store in a popup; the worker merges it on the next reload. -->
+                    <!-- Add local (new): opens the browser-local store in an in-page dialog;
+                         the worker merges it on the next reload. -->
                     <Button name="$parentAddOnsAdd" inherits="OptionsRedButtonTemplate" text="Importer un addon" hidden="true">
                         <Size><AbsDimension x="150" y="22"/></Size>
                         <Anchors><Anchor point="TOPRIGHT"><Offset><AbsDimension x="-36" y="-16"/></Offset></Anchor></Anchors>
@@ -2787,7 +2787,7 @@
                             <OnClick>
                                 if OpenLocalAddonsPage and OpenLocalAddonsPage() then
                                 else
-                                    ChatFrame1:AddMessage("Add-ons locaux : ouvrez /addons.html dans une fenêtre séparée.", 1, 1, 1)
+                                    ChatFrame1:AddMessage("Impossible d'ouvrir la boîte de dialogue des add-ons locaux.", 1, 1, 1)
                                 end
                             </OnClick>
                         </Scripts>

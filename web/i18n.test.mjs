@@ -36,6 +36,7 @@ async function boot(locale, files) {
 const frI18n = await boot('frFR', { 'en_GB.json': base, 'fr_FR.json': fr });
 assert.equal(frI18n.file, 'fr_FR');
 assert.equal(frI18n.text('login.create_account'), 'Créer un compte');
+assert.equal(frI18n.text('mobile.jump'), 'Sauter');
 assert.equal(
   frI18n.text('pending_files', { count: 3 }),
   'Fichiers en cours de chargement : 3'

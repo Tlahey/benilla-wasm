@@ -30,5 +30,13 @@
   "login.account_page_blocked": "La page de création de compte n'a pas pu s'ouvrir (vérifie le blocage des popups).",
   "login.account_not_configured": "La création de compte n'est pas configurée pour ce serveur.",
   "login.password_invalid": "Le mot de passe doit contenir 1 à 16 caractères ASCII imprimables (lettres latines, chiffres ou symboles). Vérifiez la disposition de votre clavier.",
-  "login.save_locale_failed": "Impossible d'enregistrer la préférence de langue."
+  "login.save_locale_failed": "Impossible d'enregistrer la préférence de langue.",
+  "addons.dialog_title": "Add-ons locaux",
+  "addons.close": "Fermer",
+  "mobile.account": "Nom de compte",
+  "mobile.password": "Mot de passe",
+  "mobile.movement": "Déplacement",
+  "mobile.jump": "Sauter",
+  "mobile.auto_run": "Activer ou désactiver la course automatique",
+  "mobile.target": "Cibler l’ennemi le plus proche"
 }

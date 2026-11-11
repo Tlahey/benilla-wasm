@@ -5,7 +5,8 @@ the Rust/Bevy World of Warcraft 1.12.1 client.
 
 This is a standalone source snapshot, not the development repository. It includes
 the browser client, shared protocol and asset readers, and the asset/WebSocket
-gateway. Native compilation remains available. Mobile support is not included.
+gateway. Native compilation remains available. Touch devices have a native
+login keyboard bridge and an in-game virtual joystick/control overlay.
 
 ## What is included
 
@@ -50,10 +51,10 @@ The build script packages an image but does not start or restart a server.
 
 ## Language
 
-Select English (`enUS`) or Russian (`ruRU`) at the login screen. The choice is
-saved locally; changing it reloads the page so asset requests, interface resources
-and authentication use the same locale. Available choices depend on the language
-data in the client installation served by the gateway.
+Select English (`enUS`), French (`frFR`) or Russian (`ruRU`) at the login screen.
+The choice is saved locally; changing it reloads the page so asset requests,
+interface resources and authentication use the same locale. Available choices
+depend on the language data in the client installation served by the gateway.
 
 Browser-owned messages live in [`web/i18n.js`](web/i18n.js) and its locale catalogs.
 They use the saved locale from the beginning of page loading, before the game UI
@@ -76,9 +77,11 @@ This is an experimental preview, not an official Blizzard client. Expect bugs
 and browser/GPU compatibility limitations. Use trusted servers and expose the
 gateway only with appropriate access controls and HTTPS.
 
-Desktop browsers are the current target. Mobile play and touch controls are not
-supported in this snapshot. There is no compatibility promise for every addon,
-server variant or browser/GPU combination.
+Desktop browsers remain the primary target. Touch devices can use the login
+fields with the phone's keyboard, a virtual movement joystick, camera gestures,
+and touch shortcuts for jumping, auto-run and targeting. Touch input is adapted
+to the existing game controls; mobile browser and GPU compatibility still varies.
+There is no compatibility promise for every addon or server variant.
 
 Development panels, capture/probe tools and browser trace/watch APIs are not part
 of this preview. Normal error reporting and the original in-game FPS display are

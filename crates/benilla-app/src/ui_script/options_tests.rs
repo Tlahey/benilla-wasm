@@ -23,6 +23,10 @@
 //! visible page back to the registered defaults.
 
 use benilla_ui::script::{QuadContent, SoundRequest, UiScript, WornDisplay};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 /// The window's real neighbourhood, in the manifest's own order (options before the menu — the
 /// game_menu_tests::harness_with idiom, minus the extras this file never needs).
@@ -4628,6 +4632,27 @@ fn the_game_menu_addons_entry_opens_the_addon_page_without_an_options_tab() {
         .unwrap();
     let localized_options_title = s.eval::<String>("return OptionsText('Options')").unwrap();
     assert_eq!(options_title, localized_options_title);
+    assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
+}
+
+#[test]
+fn the_local_addon_import_button_opens_the_browser_dialog() {
+    let mut s = harness();
+    let opened = Arc::new(AtomicBool::new(false));
+    let opened_by_callback = Arc::clone(&opened);
+    s.set_local_addons_opener(Box::new(move || {
+        opened_by_callback.store(true, Ordering::SeqCst);
+        true
+    }));
+
+    s.run(
+        "ShowUIPanel(BenillaOptionsFrame) \
+         OptionsAddOnsPage_Show() \
+         BenillaOptionsFrameContainerAddOnsAdd:Click()",
+    )
+    .unwrap();
+
+    assert!(opened.load(Ordering::SeqCst), "the import button calls the browser dialog");
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 

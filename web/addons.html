@@ -60,6 +60,13 @@
   .note code { color: var(--gold); }
   .foot { margin-top: 18px; font-size: 12px; color: #8f8877; }
   a { color: var(--gold-dim); }
+  body.embedded { min-height: 100%; display: block; background: transparent; }
+  body.embedded main { width: 100%; }
+  body.embedded .frame {
+    min-height: 100vh; padding: 16px 18px 20px;
+    border: 0; border-radius: 0; box-shadow: none;
+  }
+  body.embedded h1, body.embedded .foot { display: none; }
 </style>
 </head>
 <body>
@@ -97,6 +104,13 @@
   </div>
 </main>
 <script>
+  const embedded = new URLSearchParams(location.search).get('embedded') === '1';
+  document.body.classList.toggle('embedded', embedded);
+  if (embedded) {
+    document.querySelector('.note').textContent =
+      'Après installation, fermez cette boîte de dialogue puis rechargez la page du jeu (Ctrl+Shift+R). ' +
+      'Activez ensuite l’add-on dans l’écran Add-ons de la sélection des personnages.';
+  }
   const DB_NAME = 'benilla-local-addons';
   const DB_VERSION = 2;
   const FILE_STORE = 'files';

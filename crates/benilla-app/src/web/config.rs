@@ -11,18 +11,8 @@ export function openAccountsPage(url) {
     return window.open(url, '_blank', 'noopener,noreferrer') !== null;
 }
 export function openLocalAddonsPage() {
-    const width = Math.min(900, window.screen.availWidth || 900);
-    const height = Math.min(760, window.screen.availHeight || 760);
-    const left = Math.max(0, Math.round((window.screen.availWidth - width) / 2));
-    const top = Math.max(0, Math.round((window.screen.availHeight - height) / 2));
-    const popup = window.open(
-        '/addons.html',
-        'benilla-local-addons',
-        `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-    );
-    if (!popup) return false;
-    popup.focus();
-    return true;
+    const openDialog = window.openLocalAddonsDialog;
+    return typeof openDialog === 'function' && openDialog();
 }
 "#)]
 extern "C" {

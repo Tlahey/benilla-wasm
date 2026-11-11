@@ -89,6 +89,7 @@ pub(super) fn run(build: BuildId) -> AppExit {
         .init_resource::<crate::ui_hide::UiHidden>()
         .add_plugins((
             NetPlugin { connect: true },
+            crate::mobile::MobileControlsPlugin,
             EntitiesPlugin,
             crate::creature_anim::CreatureAnimPlugin,
             crate::weapon_trail::WeaponTrailPlugin,

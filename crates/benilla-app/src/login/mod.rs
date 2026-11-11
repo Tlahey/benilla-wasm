@@ -809,6 +809,7 @@ fn enter_login(mut form: ResMut<LoginForm>, mut preview: ResMut<GluePreview>) {
         let password = load_saved_password(&saved);
         form.save_password = !password.is_empty();
         form.password.set_text(&password);
+        crate::mobile::sync_login(&form.account.text, &form.password.text, true);
     }
     // `SetFocus` starts the caret solid — the screen never opens mid-blink-off (`set_text` alone
     // wouldn't do it: it no-ops when the saved name is already in the box) — and selects, so a
@@ -1020,6 +1021,38 @@ fn login_input(
             };
             form.focus(next);
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mobile_input = crate::mobile::login_input();
+        if !dialog_open {
+            if let Some(input) = mobile_input {
+                let focus = match input.field {
+                    1 => Some(Field::Account),
+                    2 => Some(Field::Password),
+                    _ => None,
+                };
+                if let Some(focus) = focus {
+                    if form.focus != focus {
+                        form.focus(focus);
+                    }
+                }
+                if form.account.text != input.account {
+                    form.account.set_text(&input.account);
+                    on_account_edited(&mut form);
+                }
+                if form.password.text != input.password {
+                    form.password.set_text(&input.password);
+                }
+                do_login |= input.submit;
+            }
+        }
+        crate::mobile::sync_login(
+            &form.account.text,
+            &form.password.text,
+            !dialog_open,
+        );
     }
 
     if !dialog_open

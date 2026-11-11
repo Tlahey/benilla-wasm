@@ -379,6 +379,8 @@ mod text_reshape;
 #[cfg(target_arch = "wasm32")]
 mod textinput;
 #[cfg(target_arch = "wasm32")]
+mod mobile;
+#[cfg(target_arch = "wasm32")]
 mod transport;
 #[cfg(target_arch = "wasm32")]
 mod tutorial;
