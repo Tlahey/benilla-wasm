@@ -335,8 +335,9 @@
                     <OnClick>
                         PlaySound("igMainMenuOption")
                         HideUIPanel(GameMenuFrame)
-                        ShowUIPanel(BenillaOptionsFrame)
-                        OptionsAddOnsPage_Show()
+                        if not OpenAddonsList or not OpenAddonsList() then
+                            ChatFrame1:AddMessage("La liste des addons n'est pas disponible.", 1, 1, 1)
+                        end
                     </OnClick>
                 </Scripts>
             </Button>

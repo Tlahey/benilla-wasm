@@ -99,8 +99,8 @@ const DROP_TC: [[f32; 4]; 3] = [
 /// The open list: TOPLEFT to the dropdown frame's BOTTOMLEFT +(8, 22 up) → (8, 48) in the plate.
 const DROP_LIST_LEFT: f32 = 8.0;
 const DROP_LIST_TOP: f32 = DROP_TOP + 32.0 - 22.0;
-/// `AddonListForceLoad`: a 32² checkbox whose TOP-center sits at (+50, −42); label at LEFT +36.
-const FORCE_LEFT: f32 = BG_W / 2.0 + 50.0 - 16.0;
+/// Reflowed after the character dropdown to leave room for the browser-local Import button.
+const FORCE_LEFT: f32 = 190.0;
 const FORCE_TOP: f32 = 42.0;
 /// `AddonListScrollFrame`: TOPLEFT (49, −73), 510×390; its slider column and track hang right.
 const SCROLL_TOP: f32 = 73.0;
@@ -554,6 +554,8 @@ pub(super) enum AddonsAction {
     Okay,
     /// Cancel, the ESC key, and the `GlueCloseButton` X — all `AddonList_OnCancel`.
     Cancel,
+    /// Open the browser-local add-on installer over this list.
+    ImportAddon,
     ScrollUp,
     ScrollDown,
     /// The slider column — **one surface covering knob and track alike**, because the law has no
@@ -567,6 +569,29 @@ pub(super) enum AddonsAction {
     DropdownPick(Option<usize>),
     /// The *Load out of date AddOns* checkbox ([`toggle_force_load`]).
     ForceLoad,
+}
+
+fn open_local_addons_importer(script: Option<&mut UiScript>) -> bool {
+    let Some(script) = script else {
+        warn!("addons: cannot open local importer without the UI script");
+        return false;
+    };
+    match script.eval::<bool>("return OpenLocalAddonsPage()") {
+        Ok(true) => true,
+        Ok(false) => {
+            warn!("addons: browser-local importer is unavailable");
+            false
+        }
+        Err(error) => {
+            error!("addons: could not open browser-local importer: {error:#}");
+            false
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn import_addon_label() -> String {
+    crate::web_config::text("addons.import_button")
 }
 
 /// The panel root (despawned whole on close).
@@ -646,6 +671,10 @@ pub(super) fn drive_addons_panel(
             AddonsAction::DisableAll => panel.set_all(false),
             AddonsAction::Okay => close_and_save = true,
             AddonsAction::Cancel => close_and_discard = true,
+            AddonsAction::ImportAddon => {
+                sounds.write(GlueSound("igMainMenuOption"));
+                open_local_addons_importer(script.as_deref_mut());
+            }
             AddonsAction::ScrollUp => scroll(&mut panel, -1),
             AddonsAction::ScrollDown => scroll(&mut panel, 1),
             AddonsAction::ScrollBar => bar_pressed = true,
@@ -1248,6 +1277,25 @@ fn spawn_panel(
                     s,
                 );
 
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let caption = import_addon_label();
+                    b.spawn(abs(BG_W - 170.0 - 20.0, FORCE_TOP - 2.0, 170.0, 35.0))
+                        .with_children(|slot| {
+                            glue_button(
+                                slot,
+                                art,
+                                &font,
+                                AddonsAction::ImportAddon,
+                                &caption,
+                                170.0,
+                                35.0,
+                                GlueBtnKind::List,
+                                s,
+                            );
+                        });
+                }
+
                 // ── the rows ────────────────────────────────────────────────────────────────
                 for (slot, (index, addon)) in panel.visible().enumerate() {
                     let top = ROW_TOP + slot as f32 * ROW_PITCH;
@@ -1818,6 +1866,20 @@ mod tests {
                 "ADDON_{token}'s fallback must be the shipped value verbatim"
             );
         }
+    }
+
+    #[test]
+    fn the_full_list_import_button_opens_the_browser_local_installer() {
+        let mut script = UiScript::new().unwrap();
+        let opened = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let opened_by_callback = std::sync::Arc::clone(&opened);
+        script.set_local_addons_opener(Box::new(move || {
+            opened_by_callback.store(true, std::sync::atomic::Ordering::SeqCst);
+            true
+        }));
+
+        assert!(open_local_addons_importer(Some(&mut script)));
+        assert!(opened.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     /// The status column's rule — THE GATE's verdict (1292): `AddOn_CanLoad`'s byte-verified

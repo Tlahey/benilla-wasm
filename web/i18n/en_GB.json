@@ -33,6 +33,7 @@
   "login.save_locale_failed": "Could not save language preference.",
   "addons.dialog_title": "Local Add-ons",
   "addons.close": "Close",
+  "addons.import_button": "Import an add-on",
   "mobile.account": "Account name",
   "mobile.password": "Password",
   "mobile.movement": "Movement",

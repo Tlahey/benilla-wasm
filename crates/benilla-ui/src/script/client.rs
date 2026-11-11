@@ -101,7 +101,7 @@ pub(super) fn install(lua: &mut Vm) -> benilla_lua::Result<()> {
         Ok(())
     })?;
 
-    // `OpenLocalAddonsPage()` — the in-game Options AddOns page's "Ajouter localement" button.
+    // `OpenLocalAddonsPage()` — the native AddOn List's browser-local import button.
     // The host supplies the browser opener; a native/test VM has no host and answers false.
     lua.register_function("OpenLocalAddonsPage", |lua, ()| {
         let model = lua.app_data_ref::<Model>().expect("model app_data");

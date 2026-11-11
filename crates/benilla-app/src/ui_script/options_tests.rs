@@ -4554,63 +4554,29 @@ fn the_game_tab_fits_its_label_at_the_drawn_scale() {
 }
 
 #[test]
-fn the_game_menu_addons_entry_opens_the_addon_page_without_an_options_tab() {
+fn the_game_menu_addons_entry_opens_the_full_addons_list() {
     let mut s = harness();
-    s.set_addons_list_opener(Box::new(|| true));
+    let requested = Arc::new(AtomicBool::new(false));
+    let callback_requested = requested.clone();
+    s.set_addons_list_opener(Box::new(move || {
+        callback_requested.store(true, Ordering::SeqCst);
+        true
+    }));
     s.run("ShowUIPanel(GameMenuFrame) GameMenuButtonAddOns:Click()")
         .unwrap();
 
     assert!(
-        s.eval::<bool>("return getglobal('BenillaOptionsFrameAddOnsTab') == nil")
-            .unwrap(),
-        "the options window no longer has a separate AddOns tab"
-    );
-    assert_eq!(
-        s.eval::<String>("return BenillaOptionsFrame.selectedCategory")
-            .unwrap(),
-        "AddOns"
-    );
-    let addon_title = s
-        .eval::<String>("return BenillaOptionsFrameTitleText:GetText()")
-        .unwrap();
-    let localized_addon_title = s.eval::<String>("return OptionsText('AddOns')").unwrap();
-    assert_eq!(addon_title, localized_addon_title);
-    assert!(
-        s.eval::<bool>("return BenillaOptionsFrameContainerBodyAddOns:IsVisible()")
-            .unwrap()
+        !s.eval::<bool>("return GameMenuFrame:IsVisible()").unwrap(),
+        "opening the list closes the game menu"
     );
     assert!(
-        s.eval::<bool>("return BenillaOptionsFrameContainerAddOnsAdd:IsVisible()")
-            .unwrap()
+        !s.eval::<bool>("return BenillaOptionsFrame:IsVisible()").unwrap(),
+        "the compact AddOns page is bypassed"
     );
-    assert!(!s.eval::<bool>("return GameMenuFrame:IsVisible()").unwrap());
-    assert!(
-        !s.eval::<bool>("return BenillaOptionsFrameGameTab:IsVisible()")
-            .unwrap()
-    );
-    for action in ["EnableAll", "DisableAll", "Apply", "Cancel", "FullList"] {
-        assert!(
-            s.eval::<bool>(&format!(
-                "return BenillaOptionsFrameContainerBodyAddOns{action}:IsVisible()"
-            ))
-            .unwrap()
-        );
-    }
-    s.run("BenillaOptionsFrameContainerBodyAddOnsFullList:Click()")
-        .unwrap();
-    assert_eq!(
-        s.eval::<String>("return BenillaOptionsFrameContainerTitle:GetText()")
-            .unwrap(),
-        s.eval::<String>("return OptionsText('AddOns') .. ' (0)'")
-            .unwrap()
-    );
+    assert!(requested.load(Ordering::SeqCst), "full-list request was sent");
 
-    s.run(
-        "BenillaOptionsFrameCloseButton:Click() \
-         ShowUIPanel(GameMenuFrame) \
-         GameMenuButtonOptions:Click()",
-    )
-    .unwrap();
+    s.run("ShowUIPanel(GameMenuFrame) GameMenuButtonOptions:Click()")
+        .unwrap();
     assert!(
         !s.eval::<bool>("return BenillaOptionsFrameContainerBodyAddOns:IsVisible()")
             .unwrap()

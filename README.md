@@ -68,8 +68,9 @@ are stored in this browser profile's IndexedDB. They are never uploaded or share
 with the server. [`web/local-addons-sw.js`](web/local-addons-sw.js) merges the
 local catalog with the server-provided catalog and serves the local files to the
 client. After installing an add-on, reload the game page and enable it in the
-character-selection AddOns screen. Add-ons can also be enabled or disabled in
-the in-game Options AddOns tab.
+character-selection AddOns screen. In game, **Esc → AddOns** opens the same full
+list, with an Import button that opens the local installer in a dialog. Add-on
+enable-state changes take effect at the next login.
 
 ## Status
 
