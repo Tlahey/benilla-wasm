@@ -172,18 +172,18 @@ const MINIMAP_ICON_SCALE_FIELD: usize = 41;
 /// field 4 = MapName (enUS), field 38 = LoadingScreenID (FK), plus the battleground columns
 /// ([`MapBattlegroundColumns`]). Remaining fields are placeholders (4-byte dwords; the schema only
 /// needs to total 168 B).
-fn map_schema() -> Schema {
+fn map_schema(name_col: usize, desc0_col: usize, desc1_col: usize) -> Schema {
     let mut s = Schema::new("Map");
     s.add_field(SchemaField::new("ID", FieldType::UInt32));
     s.add_field(SchemaField::new("Directory", FieldType::String));
     for i in 2..42 {
         match i {
             INSTANCE_TYPE_FIELD => s.add_field(SchemaField::new("InstanceType", FieldType::UInt32)),
-            MAP_NAME_FIELD => s.add_field(SchemaField::new("MapName", FieldType::String)),
-            DESCRIPTION_0_FIELD => {
+            c if c == name_col => s.add_field(SchemaField::new("MapName", FieldType::String)),
+            c if c == desc0_col => {
                 s.add_field(SchemaField::new("MapDescription0", FieldType::String))
             }
-            DESCRIPTION_1_FIELD => {
+            c if c == desc1_col => {
                 s.add_field(SchemaField::new("MapDescription1", FieldType::String))
             }
             FIELD_17 | FIELD_18 | MINIMAP_ICON_SCALE_FIELD => {
@@ -203,7 +203,10 @@ pub fn load_map_catalog(source: &mut impl FileSource) -> Result<MapCatalog> {
     let bytes = source
         .read_file(MAP)
         .with_context(|| format!("reading {MAP}"))?;
-    let rs = parse(&bytes, map_schema(), "Map")?;
+    let name_col = crate::dbc::detect_locale_column(&bytes, MAP_NAME_FIELD);
+    let desc0_col = crate::dbc::detect_locale_column(&bytes, DESCRIPTION_0_FIELD);
+    let desc1_col = crate::dbc::detect_locale_column(&bytes, DESCRIPTION_1_FIELD);
+    let rs = parse(&bytes, map_schema(name_col, desc0_col, desc1_col), "Map")?;
     let mut dirs = HashMap::with_capacity(rs.records().len());
     let mut names = HashMap::with_capacity(rs.records().len());
     let mut loading_screens = HashMap::new();
@@ -221,8 +224,8 @@ pub fn load_map_catalog(source: &mut impl FileSource) -> Result<MapCatalog> {
                 field_17: f32_at(r, FIELD_17).unwrap_or(0.0),
                 field_18: f32_at(r, FIELD_18).unwrap_or(0.0),
                 descriptions: [
-                    str_at(&rs, r, DESCRIPTION_0_FIELD).unwrap_or_default(),
-                    str_at(&rs, r, DESCRIPTION_1_FIELD).unwrap_or_default(),
+                    str_at(&rs, r, desc0_col).unwrap_or_default(),
+                    str_at(&rs, r, desc1_col).unwrap_or_default(),
                 ],
                 bracket_span: u32_at(r, BRACKET_SPAN_FIELD).unwrap_or(0),
                 group_queue: u32_at(r, GROUP_QUEUE_FIELD).unwrap_or(0),
@@ -232,7 +235,7 @@ pub fn load_map_catalog(source: &mut impl FileSource) -> Result<MapCatalog> {
         if let Some(dir) = str_at(&rs, r, 1) {
             dirs.insert(id, dir);
         }
-        if let Some(name) = str_at(&rs, r, MAP_NAME_FIELD).filter(|n| !n.is_empty()) {
+        if let Some(name) = str_at(&rs, r, name_col).filter(|n| !n.is_empty()) {
             names.insert(id, name);
         }
         // Every row's type is recorded, 0 included: "0" and "no such map" are different answers

@@ -19,12 +19,14 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use benilla_dbc::{FieldType, Schema, SchemaField};
 
 use crate::dbc::{parse, str_at, u32_at};
 use crate::FileSource;
 
 const AREA_TABLE: &str = "DBFilesClient\\AreaTable.dbc";
+/// The enUS name column (module doc); `detect_locale_column` reads the installed locale's slot
+/// instead, because the French client fills column 13.
+const COL_NAME_ENUS: usize = 11;
 
 /// One `AreaTable.dbc` row (the columns the map arc reads).
 #[derive(Clone, Debug)]
@@ -159,26 +161,17 @@ impl AreaTableCatalog {
     }
 }
 
-/// 25 u32-wide columns; only
-/// `ID/MapID/ZoneID/ExploreFlag/Flags/ExplorationLevel/AreaName/FactionGroupMask` are read (see
-/// module doc).
-fn schema() -> Schema {
-    let mut s = Schema::new("AreaTable");
-    for i in 0..25 {
-        match i {
-            11 => s.add_field(SchemaField::new("AreaName", FieldType::String)),
-            _ => s.add_field(SchemaField::new(format!("c{i}"), FieldType::UInt32)),
-        }
-    }
-    s
-}
-
 /// Read `AreaTable.dbc` off the patch chain into an [`AreaTableCatalog`].
 pub fn load_area_table_catalog(chain: &mut impl FileSource) -> Result<AreaTableCatalog> {
     let bytes = chain
         .read_file(AREA_TABLE)
         .context("reading AreaTable.dbc")?;
-    let rs = parse(&bytes, schema(), "AreaTable")?;
+    let name_col = crate::dbc::detect_locale_column(&bytes, COL_NAME_ENUS);
+    let rs = parse(
+        &bytes,
+        crate::dbc::id_name_schema("AreaTable", name_col, 25),
+        "AreaTable",
+    )?;
     let mut by_id = HashMap::with_capacity(rs.records().len());
     for r in rs.records() {
         let (Some(id), Some(map_id), Some(zone_id), Some(explore_flag), Some(flags), Some(name)) = (
@@ -187,7 +180,7 @@ pub fn load_area_table_catalog(chain: &mut impl FileSource) -> Result<AreaTableC
             u32_at(r, 2),
             u32_at(r, 3),
             u32_at(r, 4),
-            str_at(&rs, r, 11),
+            str_at(&rs, r, name_col),
         ) else {
             continue;
         };

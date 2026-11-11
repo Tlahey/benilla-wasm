@@ -52,6 +52,79 @@ pub(crate) fn i32_at(r: &Record, i: usize) -> Option<i32> {
     }
 }
 
+/// **Which locale slot a localized 1.12.1 DBC fills** — the fix for the French client's shifted
+/// name columns.
+///
+/// A localized install fills the 8-locale block's slot for **its own locale**, not the enUS slot:
+/// the French client's `AreaTable` names live at column 13 (base 11 + 2), `SkillLine` at 5
+/// (base 3 + 2), `Spell` at 122 (base 120 + 2). Those enUS columns are empty there, so a loader
+/// that hardcodes them reads `""` and silently drops every row. Pick the slot inside
+/// `base_enus..base_enus+8` with the most non-empty strings instead of assuming enUS.
+///
+/// `base_enus` is the fixed enUS column from the table's own pinned layout; the call site is the
+/// one place that knows it. Falls back to `base_enus` when the bytes are malformed, the block has
+/// no readable strings, or every slot is empty (the loader's own "no localization" case).
+pub(crate) fn detect_locale_column(bytes: &[u8], base_enus: usize) -> usize {
+    let word_at = |off: usize| -> Option<u32> {
+        bytes
+            .get(off..off + 4)
+            .map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+    };
+    let Some(nrec) = word_at(4).map(|v| v as usize) else {
+        return base_enus;
+    };
+    let Some(nfield) = word_at(8).map(|v| v as usize) else {
+        return base_enus;
+    };
+    let Some(recsize) = word_at(12).map(|v| v as usize) else {
+        return base_enus;
+    };
+    let Some(strsize) = word_at(16).map(|v| v as usize) else {
+        return base_enus;
+    };
+    if bytes.len() < 20
+        || &bytes[..4] != b"WDBC"
+        || nrec == 0
+        || nfield == 0
+        || recsize != nfield.saturating_mul(4)
+    {
+        return base_enus;
+    }
+    let Some(strbase) = 20usize.checked_add(nrec.saturating_mul(recsize)) else {
+        return base_enus;
+    };
+    let Some(str_end) = strbase.checked_add(strsize) else {
+        return base_enus;
+    };
+    let Some(strings) = bytes.get(strbase..str_end) else {
+        return base_enus;
+    };
+    if base_enus >= nfield {
+        return base_enus;
+    }
+    let last = base_enus.saturating_add(8).min(nfield);
+    let mut best = (base_enus, 0usize);
+    for column in base_enus..last {
+        let mut hits = 0usize;
+        for row in 0..nrec {
+            let off = word_at(20 + row.saturating_mul(recsize) + column.saturating_mul(4));
+            let Some(off) = off else { continue };
+            let off = off as usize;
+            let Some(rest) = strings.get(off..) else {
+                continue;
+            };
+            let end = rest.iter().position(|&b| b == 0).unwrap_or(rest.len());
+            if end > 0 {
+                hits += 1;
+            }
+        }
+        if hits > best.1 {
+            best = (column, hits);
+        }
+    }
+    best.0
+}
+
 /// A non-empty string field, resolved through the record set's string block.
 pub(crate) fn str_at(rs: &RecordSet, r: &Record, i: usize) -> Option<String> {
     match r.get_value(i)? {
@@ -113,6 +186,7 @@ pub(crate) fn load_id_name_table(
     let bytes = chain
         .read_file(file)
         .with_context(|| format!("reading {file}"))?;
+    let name_col = detect_locale_column(&bytes, name_col);
     let rs = parse(&bytes, id_name_schema(what, name_col, cols), what)?;
     let mut out = HashMap::with_capacity(rs.records().len());
     for r in rs.records() {
@@ -123,4 +197,50 @@ pub(crate) fn load_id_name_table(
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod locale_column_tests {
+    use super::detect_locale_column;
+
+    fn wdbc(rows: &[[u32; 9]], strings: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(b"WDBC");
+        out.extend_from_slice(&(rows.len() as u32).to_le_bytes());
+        out.extend_from_slice(&9u32.to_le_bytes());
+        out.extend_from_slice(&36u32.to_le_bytes());
+        out.extend_from_slice(&(strings.len() as u32).to_le_bytes());
+        for row in rows {
+            for value in row {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        out.extend_from_slice(strings);
+        out
+    }
+
+    #[test]
+    fn the_populated_locale_slot_wins_over_the_empty_enus_slot() {
+        // Column 1 (enUS) is the empty string, column 2 (the frFR slot) is "Nom".
+        let bytes = wdbc(&[[0, 0, 1, 0, 0, 0, 0, 0, 0]], b"\0Nom\0");
+        assert_eq!(detect_locale_column(&bytes, 1), 2);
+    }
+
+    #[test]
+    fn the_enus_slot_wins_when_it_is_the_populated_one() {
+        let bytes = wdbc(&[[0, 1, 0, 0, 0, 0, 0, 0, 0]], b"\0Name\0");
+        assert_eq!(detect_locale_column(&bytes, 1), 1);
+    }
+
+    #[test]
+    fn malformed_bytes_fall_back_to_the_enus_column() {
+        assert_eq!(detect_locale_column(b"not a dbc", 1), 1);
+        assert_eq!(detect_locale_column(b"", 1), 1);
+    }
+
+    #[test]
+    fn every_locale_slot_empty_reads_as_no_localization() {
+        let bytes = wdbc(&[[0, 0, 0, 0, 0, 0, 0, 0, 0]], b"\0");
+        assert_eq!(detect_locale_column(&bytes, 1), 1);
+    }
 }

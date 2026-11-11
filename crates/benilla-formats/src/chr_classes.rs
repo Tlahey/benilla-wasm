@@ -158,11 +158,11 @@ impl ChrClasses {
     }
 }
 
-fn schema() -> Schema {
+fn schema(name_col: usize) -> Schema {
     let mut s = Schema::new("ChrClasses");
     for i in 0..CHR_CLASSES_FIELDS {
         // The active install's name slot and pet token are strings.
-        let ty = if i == PET_NAME_TOKEN_FIELD || i == 5 {
+        let ty = if i == PET_NAME_TOKEN_FIELD || i == name_col {
             FieldType::String
         } else {
             FieldType::UInt32
@@ -177,14 +177,15 @@ pub fn load_chr_classes(chain: &mut impl FileSource) -> Result<ChrClasses> {
     let bytes = chain
         .read_file(CHR_CLASSES)
         .with_context(|| format!("reading {CHR_CLASSES}"))?;
-    let rs = parse(&bytes, schema(), "ChrClasses.dbc")?;
+    let name_col = crate::dbc::detect_locale_column(&bytes, 5);
+    let rs = parse(&bytes, schema(name_col), "ChrClasses.dbc")?;
     let mut by_id = HashMap::new();
     for r in rs.records() {
         let Some(id) = u32_at(r, 0) else { continue };
         by_id.insert(
             id,
             ChrClass {
-                name: str_at(&rs, r, 5),
+                name: str_at(&rs, r, name_col),
                 pet_name_token: str_at(&rs, r, PET_NAME_TOKEN_FIELD),
                 has_relic_slot: u32_at(r, RELIC_SLOT_FIELD).is_some_and(|v| v != 0),
                 spell_family: u32_at(r, SPELL_FAMILY_FIELD).unwrap_or(0),

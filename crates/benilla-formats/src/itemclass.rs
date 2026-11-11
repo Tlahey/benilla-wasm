@@ -68,11 +68,14 @@ pub fn load_item_classes(chain: &mut impl crate::FileSource) -> Result<ItemClass
     let bytes = chain
         .read_file(ITEM_CLASS)
         .with_context(|| format!("reading {ITEM_CLASS}"))?;
+    let name_col = crate::dbc::detect_locale_column(&bytes, 3);
     let rs = parse(&bytes, item_class_schema(), "ItemClass")?;
     let mut names = HashMap::with_capacity(rs.records().len());
     for r in rs.records() {
-        let (Some(id), Some(name)) = (u32_at(r, 0), str_at(&rs, r, 3).filter(|n| !n.is_empty()))
-        else {
+        let (Some(id), Some(name)) = (
+            u32_at(r, 0),
+            str_at(&rs, r, name_col).filter(|n| !n.is_empty()),
+        ) else {
             continue;
         };
         names.insert(id, name);

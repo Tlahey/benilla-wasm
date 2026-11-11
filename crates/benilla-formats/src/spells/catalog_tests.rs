@@ -1054,7 +1054,17 @@ fn real_prospecting_effect_is_absent_from_5875() {
     let data = crate::wow_data_or_skip!();
     let mut chain = crate::open_chain(&data).expect("open chain");
     let raw = chain.read_file(SPELL).expect("Spell.dbc");
-    let set = parse(&raw, spell_schema(), "Spell.dbc").expect("parse Spell.dbc");
+    let set = parse(
+        &raw,
+        spell_schema(
+            COL_NAME_ENUS,
+            COL_NAME_SUBTEXT_ENUS,
+            COL_DESCRIPTION_ENUS,
+            COL_AURA_DESCRIPTION_ENUS,
+        ),
+        "Spell.dbc",
+    )
+    .expect("parse Spell.dbc");
 
     let mut slots = 0usize;
     for r in set.records() {
@@ -1181,7 +1191,17 @@ fn real_item_target_family_and_its_gate_columns() {
     // one row puts its enchant effect anywhere but slot 0. Read raw, since the catalog itself
     // only keeps `effects[0]`.
     let raw = chain.read_file(SPELL).expect("Spell.dbc");
-    let set = parse(&raw, spell_schema(), "Spell.dbc").expect("parse Spell.dbc");
+    let set = parse(
+        &raw,
+        spell_schema(
+            COL_NAME_ENUS,
+            COL_NAME_SUBTEXT_ENUS,
+            COL_DESCRIPTION_ENUS,
+            COL_AURA_DESCRIPTION_ENUS,
+        ),
+        "Spell.dbc",
+    )
+    .expect("parse Spell.dbc");
     let is_enchant = |e: u32| {
         e == crate::SPELL_EFFECT_ENCHANT_ITEM || e == crate::SPELL_EFFECT_ENCHANT_ITEM_TEMPORARY
     };
@@ -1313,7 +1333,17 @@ fn real_spell_catalog_cost_columns() {
     // in the health lane), which is why the per-level term is modeled in `power_cost` but
     // dormant for player tooltips. (1074)
     let bytes = chain.read_file(super::SPELL).expect("reading Spell.dbc");
-    let rs = super::parse(&bytes, super::spell_schema(), "Spell.dbc").expect("Spell.dbc");
+    let rs = super::parse(
+        &bytes,
+        super::spell_schema(
+            super::COL_NAME_ENUS,
+            super::COL_NAME_SUBTEXT_ENUS,
+            super::COL_DESCRIPTION_ENUS,
+            super::COL_AURA_DESCRIPTION_ENUS,
+        ),
+        "Spell.dbc",
+    )
+    .expect("Spell.dbc");
     let mut per_level_rows = 0u32;
     for r in rs.records() {
         let id = super::u32_at(r, 0).unwrap_or(0);

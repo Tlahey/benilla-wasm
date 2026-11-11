@@ -483,6 +483,8 @@ pub fn load_faction_catalog(chain: &mut impl FileSource) -> Result<FactionCatalo
     let bytes = chain
         .read_file(FACTION)
         .with_context(|| format!("reading {FACTION}"))?;
+    let name_col = crate::dbc::detect_locale_column(&bytes, 19);
+    let desc_col = crate::dbc::detect_locale_column(&bytes, 28);
     let rs = parse(&bytes, faction_schema(), "Faction")?;
     let mut factions = HashMap::with_capacity(rs.records().len());
     let mut names = HashMap::with_capacity(rs.records().len());
@@ -503,12 +505,12 @@ pub fn load_faction_catalog(chain: &mut impl FileSource) -> Result<FactionCatalo
                 },
             );
             // Name0 (enUS) — column 19 after ID/RepIndex/4·race/4·class/4·base/4·flags/Team.
-            if let Some(name) = crate::dbc::str_at(&rs, r, 19) {
+            if let Some(name) = crate::dbc::str_at(&rs, r, name_col) {
                 names.insert(id, name);
             }
             // Desc0 (enUS) — column 28, past the 8 name columns and their flag word. Empty for
             // most rows, so this map is far smaller than `names` and is left unsized.
-            if let Some(desc) = crate::dbc::str_at(&rs, r, 28) {
+            if let Some(desc) = crate::dbc::str_at(&rs, r, desc_col) {
                 descriptions.insert(id, desc);
             }
         }
@@ -517,11 +519,14 @@ pub fn load_faction_catalog(chain: &mut impl FileSource) -> Result<FactionCatalo
     let bytes = chain
         .read_file(FACTION_GROUP)
         .with_context(|| format!("reading {FACTION_GROUP}"))?;
+    let group_name_col = crate::dbc::detect_locale_column(&bytes, 3);
     let rs = parse(&bytes, faction_group_schema(), "FactionGroup")?;
     let mut group_names = HashMap::with_capacity(rs.records().len());
     let mut group_internal_names = HashMap::with_capacity(rs.records().len());
     for r in rs.records() {
-        let (Some(mask_id), Some(name)) = (u32_at(r, 1), crate::dbc::str_at(&rs, r, 3)) else {
+        let (Some(mask_id), Some(name)) =
+            (u32_at(r, 1), crate::dbc::str_at(&rs, r, group_name_col))
+        else {
             continue;
         };
         // Field 2 is `InternalName`, field 3 is `Name0` — see the schema above. Both are read

@@ -96,7 +96,7 @@ impl AreaPoiCatalog {
 /// 29 fields per the module doc: the two loc-string blocks are 9 dwords each (a string + 7
 /// other-locale string slots + a flags dword), matching the `TaxiNodes` schema pattern
 /// (`crate::schema_for`).
-fn schema() -> Schema {
+fn schema(name_col: usize, desc_col: usize) -> Schema {
     let mut s = Schema::new("AreaPOI");
     for name in ["ID", "Importance", "Icon", "FactionID"] {
         s.add_field(SchemaField::new(name, FieldType::UInt32));
@@ -105,15 +105,36 @@ fn schema() -> Schema {
     for name in ["ContinentID", "Flags", "AreaID"] {
         s.add_field(SchemaField::new(name, FieldType::UInt32));
     }
-    for (name_col, flags_col) in [("Name", "NameFlags"), ("Description", "DescriptionFlags")] {
-        s.add_field(SchemaField::new(name_col, FieldType::String)); // enUS (locale 0)
-        s.add_field(SchemaField::new_array(
-            format!("{name_col}OtherLocales"),
-            FieldType::String,
-            7,
+    for i in 10..18 {
+        s.add_field(SchemaField::new(
+            if i == name_col {
+                "NameLocale"
+            } else {
+                "NameOther"
+            },
+            if i == name_col {
+                FieldType::String
+            } else {
+                FieldType::UInt32
+            },
         ));
-        s.add_field(SchemaField::new(flags_col, FieldType::UInt32));
     }
+    s.add_field(SchemaField::new("NameFlags", FieldType::UInt32));
+    for i in 19..27 {
+        s.add_field(SchemaField::new(
+            if i == desc_col {
+                "DescriptionLocale"
+            } else {
+                "DescriptionOther"
+            },
+            if i == desc_col {
+                FieldType::String
+            } else {
+                FieldType::UInt32
+            },
+        ));
+    }
+    s.add_field(SchemaField::new("DescriptionFlags", FieldType::UInt32));
     s.add_field(SchemaField::new("WorldStateID", FieldType::UInt32));
     s
 }
@@ -121,7 +142,9 @@ fn schema() -> Schema {
 /// Read `AreaPOI.dbc` off the patch chain into an [`AreaPoiCatalog`].
 pub fn load_area_poi_catalog(chain: &mut impl FileSource) -> Result<AreaPoiCatalog> {
     let bytes = chain.read_file(AREA_POI).context("reading AreaPOI.dbc")?;
-    let rs = parse(&bytes, schema(), "AreaPOI")?;
+    let name_col = crate::dbc::detect_locale_column(&bytes, 10);
+    let desc_col = crate::dbc::detect_locale_column(&bytes, 19);
+    let rs = parse(&bytes, schema(name_col, desc_col), "AreaPOI")?;
     let mut rows = Vec::with_capacity(rs.records().len());
     let mut by_id = HashMap::with_capacity(rs.records().len());
     for r in rs.records() {
@@ -137,8 +160,8 @@ pub fn load_area_poi_catalog(chain: &mut impl FileSource) -> Result<AreaPoiCatal
             continent_id: u32_at(r, 7).unwrap_or(0),
             flags: u32_at(r, 8).unwrap_or(0),
             area_id: u32_at(r, 9).unwrap_or(0),
-            name: str_at(&rs, r, 10).unwrap_or_default(),
-            description: str_at(&rs, r, 19).unwrap_or_default(),
+            name: str_at(&rs, r, name_col).unwrap_or_default(),
+            description: str_at(&rs, r, desc_col).unwrap_or_default(),
             world_state_id: u32_at(r, 28).unwrap_or(0),
         };
         by_id.insert(id, rows.len());

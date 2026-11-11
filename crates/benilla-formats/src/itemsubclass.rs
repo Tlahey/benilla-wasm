@@ -260,10 +260,13 @@ pub fn load_item_sub_classes(chain: &mut impl crate::FileSource) -> Result<ItemS
     let bytes = chain
         .read_file(ITEM_SUB_CLASS)
         .with_context(|| format!("reading {ITEM_SUB_CLASS}"))?;
+    let display_col = crate::dbc::detect_locale_column(&bytes, 10);
+    let verbose_col = crate::dbc::detect_locale_column(&bytes, 19);
     let rs = parse(&bytes, item_sub_class_schema(), "ItemSubClass")?;
     let mask_bytes = chain
         .read_file(ITEM_SUB_CLASS_MASK)
         .with_context(|| format!("reading {ITEM_SUB_CLASS_MASK}"))?;
+    let mask_col = crate::dbc::detect_locale_column(&mask_bytes, 2);
     let mask_rs = parse(
         &mask_bytes,
         item_sub_class_mask_schema(),
@@ -274,7 +277,7 @@ pub fn load_item_sub_classes(chain: &mut impl crate::FileSource) -> Result<ItemS
         let (Some(class), Some(mask), Some(name)) = (
             u32_at(r, 0),
             u32_at(r, 1),
-            crate::dbc::str_at(&mask_rs, r, 2).filter(|n| !n.is_empty()),
+            crate::dbc::str_at(&mask_rs, r, mask_col).filter(|n| !n.is_empty()),
         ) else {
             continue;
         };
@@ -300,8 +303,8 @@ pub fn load_item_sub_classes(chain: &mut impl crate::FileSource) -> Result<ItemS
         );
         // VerboseName enUS (col 19) first, DisplayName enUS (col 10) fallback — the struct doc's
         // byte law. Empty both → no name row (the header renders blank, faithfully unlikely).
-        let display = crate::dbc::str_at(&rs, r, 10).filter(|n| !n.is_empty());
-        let name = crate::dbc::str_at(&rs, r, 19)
+        let display = crate::dbc::str_at(&rs, r, display_col).filter(|n| !n.is_empty());
+        let name = crate::dbc::str_at(&rs, r, verbose_col)
             .filter(|n| !n.is_empty())
             .or_else(|| display.clone());
         if let Some(name) = name {

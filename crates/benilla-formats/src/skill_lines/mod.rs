@@ -482,13 +482,13 @@ impl SkillLineCatalog {
     }
 }
 
-fn skill_line_schema() -> Schema {
+fn skill_line_schema(name_col: usize, desc_col: usize) -> Schema {
     let mut s = Schema::new("SkillLine");
     for i in 0..SKILL_LINE_FIELDS {
-        if i == COL_SL_NAME_ENUS {
-            s.add_field(SchemaField::new("NameEnUs", FieldType::String));
-        } else if i == COL_SL_DESC_ENUS {
-            s.add_field(SchemaField::new("DescEnUs", FieldType::String));
+        if i == name_col {
+            s.add_field(SchemaField::new("NameLocale", FieldType::String));
+        } else if i == desc_col {
+            s.add_field(SchemaField::new("DescLocale", FieldType::String));
         } else {
             s.add_field(SchemaField::new(format!("F{i}"), FieldType::UInt32));
         }
@@ -504,10 +504,10 @@ fn skill_line_ability_schema() -> Schema {
     s
 }
 
-fn skill_line_category_schema() -> Schema {
+fn skill_line_category_schema(name_col: usize) -> Schema {
     let mut s = Schema::new("SkillLineCategory");
     for i in 0..SKILL_LINE_CATEGORY_FIELDS {
-        let ty = if i == COL_SLC_NAME_ENUS {
+        let ty = if i == name_col {
             FieldType::String
         } else {
             FieldType::UInt32
@@ -524,16 +524,17 @@ fn load_categories(chain: &mut impl FileSource) -> HashMap<u32, (String, u32)> {
     let Ok(bytes) = chain.read_file(SKILL_LINE_CATEGORY) else {
         return map;
     };
+    let name_col = crate::dbc::detect_locale_column(&bytes, COL_SLC_NAME_ENUS);
     let Ok(set) = parse(
         &bytes,
-        skill_line_category_schema(),
+        skill_line_category_schema(name_col),
         "SkillLineCategory.dbc",
     ) else {
         return map;
     };
     for r in set.records() {
         let Some(id) = u32_at(r, 0) else { continue };
-        if let Some(name) = str_at(&set, r, COL_SLC_NAME_ENUS) {
+        if let Some(name) = str_at(&set, r, name_col) {
             map.insert(id, (name, u32_at(r, COL_SLC_ORDER).unwrap_or(0)));
         }
     }
@@ -588,16 +589,22 @@ pub fn load_skill_line_catalog(chain: &mut impl FileSource) -> Result<SkillLineC
     let sl_bytes = chain
         .read_file(SKILL_LINE)
         .context("reading SkillLine.dbc")?;
-    let sl_set = parse(&sl_bytes, skill_line_schema(), "SkillLine.dbc")?;
+    let name_col = crate::dbc::detect_locale_column(&sl_bytes, COL_SL_NAME_ENUS);
+    let desc_col = crate::dbc::detect_locale_column(&sl_bytes, COL_SL_DESC_ENUS);
+    let sl_set = parse(
+        &sl_bytes,
+        skill_line_schema(name_col, desc_col),
+        "SkillLine.dbc",
+    )?;
     let mut lines: HashMap<u32, SkillLineInfo> = HashMap::new();
     for r in sl_set.records() {
         let Some(id) = u32_at(r, 0) else { continue };
-        let name = str_at(&sl_set, r, COL_SL_NAME_ENUS).unwrap_or_default();
+        let name = str_at(&sl_set, r, name_col).unwrap_or_default();
         let icon = u32_at(r, COL_SL_SPELL_ICON)
             .filter(|&i| i != 0)
             .and_then(|i| icons.get(&i).cloned());
         let category_id = u32_at(r, 1).unwrap_or(0);
-        let description = str_at(&sl_set, r, COL_SL_DESC_ENUS).unwrap_or_default();
+        let description = str_at(&sl_set, r, desc_col).unwrap_or_default();
         lines.insert(
             id,
             SkillLineInfo {

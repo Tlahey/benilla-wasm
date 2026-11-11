@@ -307,25 +307,101 @@ fn feed_zone_events(
     cache.wmo_group = wmo_group;
 }
 
+/// `/console zone` — the one line that answers "why is the zone bar empty?".
+///
+/// It prints the authority the zone-text feed actually reads (the terrain `CurrentArea`), the
+/// catalog row it resolved, the indoor claim, and every host global the minimap/zone Lua reads.
+/// A bar that is drawn but blank is then attributable to exactly one of: no leaf, no catalog row,
+/// an empty pushed text, or a Lua global that never got set — instead of being guessed at from a
+/// screenshot.
+fn console_zone(world: &mut World, _args: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let area = world
+        .get_resource::<benilla_world::terrain_stream::CurrentArea>()
+        .and_then(|a| a.0);
+    out.push(match area {
+        Some(id) => format!("area id: {id}"),
+        None => "area id: unresolved (terrain authority has no leaf)".to_string(),
+    });
+    match world.get_resource::<AreaTableRes>() {
+        Some(cat) => {
+            out.push(format!("AreaTable rows: {}", cat.0.len()));
+            if let Some(id) = area {
+                match cat.0.get(id) {
+                    Some(row) => {
+                        out.push(format!(
+                            "leaf name: {:?} (parent zone {})",
+                            row.name, row.zone_id
+                        ));
+                        let zone = if row.zone_id == 0 { id } else { row.zone_id };
+                        out.push(format!(
+                            "top zone: {zone} {:?}",
+                            cat.0.name(zone).unwrap_or("")
+                        ));
+                    }
+                    None => out.push(format!("leaf id {id}: not in AreaTable")),
+                }
+            }
+        }
+        None => out.push("AreaTable catalog: absent (load failed)".to_string()),
+    }
+    let indoor = world
+        .get_resource::<benilla_world::wmo_portal::CurrentAreaInterior>()
+        .is_some_and(|i| i.0.is_some());
+    out.push(format!("indoor claim: {indoor}"));
+    match world.get_non_send_resource_mut::<UiScript>() {
+        Some(mut script) => {
+            for (label, expr) in [
+                ("GetZoneText", "return GetZoneText()"),
+                ("GetRealZoneText", "return GetRealZoneText()"),
+                ("GetSubZoneText", "return GetSubZoneText()"),
+                ("GetMinimapZoneText", "return GetMinimapZoneText()"),
+                (
+                    "MinimapZoneText:GetText",
+                    "return MinimapZoneText and MinimapZoneText:GetText()",
+                ),
+            ] {
+                match script.eval::<Option<String>>(expr) {
+                    Ok(Some(text)) => out.push(format!("{label}: {text:?}")),
+                    Ok(None) => out.push(format!("{label}: <nil/empty>")),
+                    Err(e) => out.push(format!("{label}: ERROR {e}")),
+                }
+            }
+            match script.eval::<(i64, i64)>("return GetGameTime()") {
+                Ok((h, m)) => out.push(format!("GetGameTime: {h}:{m:02}")),
+                Err(e) => out.push(format!("GetGameTime: ERROR {e}")),
+            }
+        }
+        None => out.push("VM: absent (not in the world yet)".to_string()),
+    }
+    out
+}
+
 /// The shared area catalog + the zone-event feed (decision 0287 + fold-back).
 pub(crate) struct AreaPlugin;
 
 impl Plugin for AreaPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, load_area_table.after(AssetSet::Open))
-            .add_systems(
-                Update,
-                // After the script tick, like the other feeds: the event dispatches on the next
-                // tick — a frame of latency the splash can't perceive. MINIMAP_ZONE_CHANGED's
-                // handler reads the PvP globals written above in the same call. ALSO after the
-                // leaf authority (which orders after the interior claim): leaf, indoor bit, and
-                // names must come from ONE coherent frame — the client's single-pass resolve
-                // (`0x67e510`); a fresh claim against a stale leaf fired the abbey login's
-                // spurious big splash.
-                feed_zone_events
-                    .after(crate::ui_script::UiInput)
-                    .after(benilla_world::terrain_stream::AreaAuthoritySet),
-            );
+        use crate::console::ConsoleCommandApp;
+        app.console_command(
+            "zone",
+            "Print the current area, its catalog row, the indoor claim and the zone-text globals.",
+            console_zone,
+        )
+        .add_systems(Startup, load_area_table.after(AssetSet::Open))
+        .add_systems(
+            Update,
+            // After the script tick, like the other feeds: the event dispatches on the next
+            // tick — a frame of latency the splash can't perceive. MINIMAP_ZONE_CHANGED's
+            // handler reads the PvP globals written above in the same call. ALSO after the
+            // leaf authority (which orders after the interior claim): leaf, indoor bit, and
+            // names must come from ONE coherent frame — the client's single-pass resolve
+            // (`0x67e510`); a fresh claim against a stale leaf fired the abbey login's
+            // spurious big splash.
+            feed_zone_events
+                .after(crate::ui_script::UiInput)
+                .after(benilla_world::terrain_stream::AreaAuthoritySet),
+        );
     }
 }
 

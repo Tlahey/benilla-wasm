@@ -53,6 +53,7 @@ mod dialog_verbs;
 mod tutorial;
 mod worldmap_arrow;
 // The five camera views + FlipCameraYaw — the reference's `UIUtil\Camera.cpp` Lua surface.
+mod audit;
 mod button;
 mod camera_view;
 mod channel;
@@ -88,6 +89,7 @@ mod guild;
 mod handler_prof;
 mod screenshot;
 mod tabard;
+pub use audit::UiAuditRow;
 pub use handler_prof::HandlerRow;
 
 /// The widget-method surface measurement — shared by the `dump_widget_methods` example and the

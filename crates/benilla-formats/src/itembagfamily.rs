@@ -72,11 +72,14 @@ pub fn load_item_bag_families(chain: &mut impl crate::FileSource) -> Result<Item
     let bytes = chain
         .read_file(ITEM_BAG_FAMILY)
         .with_context(|| format!("reading {ITEM_BAG_FAMILY}"))?;
+    let name_col = crate::dbc::detect_locale_column(&bytes, 1);
     let rs = parse(&bytes, item_bag_family_schema(), "ItemBagFamily")?;
     let mut names = HashMap::with_capacity(rs.records().len());
     for r in rs.records() {
-        let (Some(id), Some(name)) = (u32_at(r, 0), str_at(&rs, r, 1).filter(|n| !n.is_empty()))
-        else {
+        let (Some(id), Some(name)) = (
+            u32_at(r, 0),
+            str_at(&rs, r, name_col).filter(|n| !n.is_empty()),
+        ) else {
             continue;
         };
         names.insert(id, name);

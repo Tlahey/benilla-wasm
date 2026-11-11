@@ -380,6 +380,34 @@ pub(crate) fn on_cvar(ev: On<crate::cvars::CvarChanged>, mut scale: ResMut<UiSca
     }
 }
 
+/// `/console uiaudit [prefix]` — list the visible frames/regions whose text or art is empty.
+///
+/// This is the missing-info half the script log does not cover: a FontString with no text and a
+/// Texture with no path/fill/gradient are not errors, so nothing records them until asked. The
+/// walk is over the live widget arena (`UiScript::ui_audit`), which means a screen like
+/// `MinimapZoneTextButton` is found by the same names the player already sees. The optional
+/// argument is a frame-name prefix (`uiaudit Minimap`), the one way to keep a full UI quiet.
+fn console_ui_audit(world: &mut World, args: &str) -> Vec<String> {
+    let scope = args.trim();
+    let scope = (!scope.is_empty()).then_some(scope);
+    let Some(script) = world.get_non_send_resource::<UiScript>() else {
+        return vec!["uiaudit: no interface (not in the world yet)".to_string()];
+    };
+    let rows = script.ui_audit(scope);
+    if rows.is_empty() {
+        return vec![match scope {
+            Some(scope) => format!("uiaudit: nothing empty in frames named {scope}*"),
+            None => "uiaudit: nothing empty on a visible frame".to_string(),
+        }];
+    }
+    const CAP: usize = 40;
+    let mut out: Vec<String> = rows.iter().take(CAP).map(|row| row.line()).collect();
+    if rows.len() > CAP {
+        out.push(format!("... {} more (scope the audit)", rows.len() - CAP));
+    }
+    out
+}
+
 /// `/console reloadUI` — the reference's own console command, and the same deferred rebuild
 /// `ReloadUI()` and `/reload` queue (decision 1291): through the session seam, run by
 /// [`run_pending_reload`] at the top of the next frame.
@@ -397,7 +425,12 @@ impl Plugin for UiScriptPlugin {
     fn build(&self, app: &mut App) {
         use crate::console::ConsoleCommandApp;
         app.add_observer(on_cvar);
-        app.console_command("reloadUI", "Reload the interface.", console_reload_ui);
+        app.console_command("reloadUI", "Reload the interface.", console_reload_ui)
+            .console_command(
+                "uiaudit",
+                "List visible UI text/art that is empty; optional frame-name prefix.",
+                console_ui_audit,
+            );
         // **The quit root of the shutdown tail, on the exit edge** (decision 1528). It was
         // `.add_systems(Update, shutdown_on_exit)` below, which cannot see the `AppExit` a player
         // produces — the close button's is written in `PostUpdate` — so quitting from in-world

@@ -247,13 +247,14 @@ impl PetFoodNames {
     }
 }
 
-fn family_schema() -> Schema {
+fn family_schema(name_col: usize) -> Schema {
     let mut s = Schema::new("CreatureFamily");
     for i in 0..FAMILY_FIELDS {
         let ty = match i {
             // minScale / maxScale — the only two floats in the record.
             1 | 3 => FieldType::Float32,
-            FAMILY_NAME_FIELD | FAMILY_ICON_FIELD => FieldType::String,
+            FAMILY_ICON_FIELD => FieldType::String,
+            c if c == name_col => FieldType::String,
             // The rest of the locale block reads as dwords: every one is 0 in the shipped file, and
             // typing them as strings would make the parser chase seven zero offsets per row.
             _ => FieldType::UInt32,
@@ -263,10 +264,10 @@ fn family_schema() -> Schema {
     s
 }
 
-fn food_schema() -> Schema {
+fn food_schema(name_col: usize) -> Schema {
     let mut s = Schema::new("ItemPetFood");
     for i in 0..FOOD_FIELDS {
-        let ty = if i == FOOD_NAME_FIELD {
+        let ty = if i == name_col {
             FieldType::String
         } else {
             FieldType::UInt32
@@ -281,13 +282,14 @@ pub fn load_creature_families(chain: &mut impl crate::FileSource) -> Result<Crea
     let bytes = chain
         .read_file(CREATURE_FAMILY)
         .with_context(|| format!("reading {CREATURE_FAMILY}"))?;
-    let rs = parse(&bytes, family_schema(), "CreatureFamily.dbc")?;
+    let name_col = crate::dbc::detect_locale_column(&bytes, FAMILY_NAME_FIELD);
+    let rs = parse(&bytes, family_schema(name_col), "CreatureFamily.dbc")?;
     let mut by_id = HashMap::with_capacity(rs.records().len());
     for r in rs.records() {
         let Some(id) = u32_at(r, 0) else { continue };
         // A row with no enUS name is dropped rather than stored empty: the binding's contract is
         // "a word or nil", and an empty string would render as a trailing space on the level line.
-        let Some(name) = str_at(&rs, r, FAMILY_NAME_FIELD).filter(|n| !n.is_empty()) else {
+        let Some(name) = str_at(&rs, r, name_col).filter(|n| !n.is_empty()) else {
             continue;
         };
         by_id.insert(
@@ -311,11 +313,12 @@ pub fn load_pet_food_names(chain: &mut impl crate::FileSource) -> Result<PetFood
     let bytes = chain
         .read_file(ITEM_PET_FOOD)
         .with_context(|| format!("reading {ITEM_PET_FOOD}"))?;
-    let rs = parse(&bytes, food_schema(), "ItemPetFood.dbc")?;
+    let food_name_col = crate::dbc::detect_locale_column(&bytes, FOOD_NAME_FIELD);
+    let rs = parse(&bytes, food_schema(food_name_col), "ItemPetFood.dbc")?;
     let mut by_id = HashMap::with_capacity(rs.records().len());
     for r in rs.records() {
         let Some(id) = u32_at(r, 0) else { continue };
-        if let Some(name) = str_at(&rs, r, FOOD_NAME_FIELD) {
+        if let Some(name) = str_at(&rs, r, food_name_col) {
             by_id.insert(id, name);
         }
     }

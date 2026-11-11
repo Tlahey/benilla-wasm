@@ -50,10 +50,10 @@ impl SpellMechanicCatalog {
     }
 }
 
-fn schema() -> Schema {
+fn schema(name_col: usize) -> Schema {
     let mut s = Schema::new("SpellMechanic");
     for i in 0..SPELL_MECHANIC_FIELDS {
-        let ty = if i == COL_NAME_ENUS {
+        let ty = if i == name_col {
             FieldType::String
         } else {
             FieldType::UInt32
@@ -68,11 +68,12 @@ pub fn load_spell_mechanic_catalog(chain: &mut impl FileSource) -> Result<SpellM
     let bytes = chain
         .read_file(SPELL_MECHANIC)
         .with_context(|| format!("reading {SPELL_MECHANIC}"))?;
-    let rs = parse(&bytes, schema(), "SpellMechanic.dbc")?;
+    let name_col = crate::dbc::detect_locale_column(&bytes, COL_NAME_ENUS);
+    let rs = parse(&bytes, schema(name_col), "SpellMechanic.dbc")?;
     let mut names = HashMap::new();
     for r in rs.records() {
         let Some(id) = u32_at(r, 0) else { continue };
-        if let Some(name) = str_at(&rs, r, COL_NAME_ENUS) {
+        if let Some(name) = str_at(&rs, r, name_col) {
             names.insert(id, name);
         }
     }

@@ -707,17 +707,22 @@ impl SpellCatalog {
 /// read through [`i32_at`] regardless of the schema tag (a raw dword's bits don't change between
 /// the `UInt32`/`Int32` variants — only which `_at` helper a caller reaches for), so they stay
 /// untagged here like every other unread-as-a-type integer column.
-fn spell_schema() -> Schema {
+fn spell_schema(
+    name_col: usize,
+    subtext_col: usize,
+    desc_col: usize,
+    aura_desc_col: usize,
+) -> Schema {
     let mut s = Schema::new("Spell");
     for i in 0..SPELL_FIELDS {
-        if i == COL_NAME_ENUS {
-            s.add_field(SchemaField::new("NameEnUs", FieldType::String));
-        } else if i == COL_NAME_SUBTEXT_ENUS {
-            s.add_field(SchemaField::new("NameSubtextEnUs", FieldType::String));
-        } else if i == COL_DESCRIPTION_ENUS {
-            s.add_field(SchemaField::new("DescriptionEnUs", FieldType::String));
-        } else if i == COL_AURA_DESCRIPTION_ENUS {
-            s.add_field(SchemaField::new("AuraDescriptionEnUs", FieldType::String));
+        if i == name_col {
+            s.add_field(SchemaField::new("NameLocale", FieldType::String));
+        } else if i == subtext_col {
+            s.add_field(SchemaField::new("NameSubtextLocale", FieldType::String));
+        } else if i == desc_col {
+            s.add_field(SchemaField::new("DescriptionLocale", FieldType::String));
+        } else if i == aura_desc_col {
+            s.add_field(SchemaField::new("AuraDescriptionLocale", FieldType::String));
         } else if i == COL_SPEED {
             s.add_field(SchemaField::new("Speed", FieldType::Float32));
         } else if (COL_EFFECT_REAL_POINTS_PER_LEVEL_1..COL_EFFECT_REAL_POINTS_PER_LEVEL_1 + 3)
@@ -772,7 +777,15 @@ pub fn load_spell_catalog(chain: &mut impl FileSource) -> Result<SpellCatalog> {
     };
 
     let spell_bytes = chain.read_file(SPELL).context("reading Spell.dbc")?;
-    let spells_set = parse(&spell_bytes, spell_schema(), "Spell.dbc")?;
+    let name_col = crate::dbc::detect_locale_column(&spell_bytes, COL_NAME_ENUS);
+    let subtext_col = crate::dbc::detect_locale_column(&spell_bytes, COL_NAME_SUBTEXT_ENUS);
+    let desc_col = crate::dbc::detect_locale_column(&spell_bytes, COL_DESCRIPTION_ENUS);
+    let aura_desc_col = crate::dbc::detect_locale_column(&spell_bytes, COL_AURA_DESCRIPTION_ENUS);
+    let spells_set = parse(
+        &spell_bytes,
+        spell_schema(name_col, subtext_col, desc_col, aura_desc_col),
+        "Spell.dbc",
+    )?;
     let mut spells: HashMap<u32, SpellDisplay> = HashMap::new();
     let mut learned_spell: HashMap<u32, u32> = HashMap::new();
     let mut declared_language: HashMap<u32, u32> = HashMap::new();
@@ -798,8 +811,8 @@ pub fn load_spell_catalog(chain: &mut impl FileSource) -> Result<SpellCatalog> {
                 declared_language.insert(id, lang as u32);
             }
         }
-        let name = str_at(&spells_set, r, COL_NAME_ENUS).unwrap_or_default();
-        let rank = str_at(&spells_set, r, COL_NAME_SUBTEXT_ENUS);
+        let name = str_at(&spells_set, r, name_col).unwrap_or_default();
+        let rank = str_at(&spells_set, r, subtext_col);
         let icon = u32_at(r, COL_ICON_ID)
             .filter(|&i| i != 0)
             .and_then(|i| icons.get(&i).cloned());
@@ -908,8 +921,8 @@ pub fn load_spell_catalog(chain: &mut impl FileSource) -> Result<SpellCatalog> {
                 active_icon: u32_at(r, COL_ACTIVE_ICON_ID)
                     .filter(|&i| i != 0)
                     .and_then(|i| icons.get(&i).cloned()),
-                description: str_at(&spells_set, r, COL_DESCRIPTION_ENUS),
-                aura_description: str_at(&spells_set, r, COL_AURA_DESCRIPTION_ENUS),
+                description: str_at(&spells_set, r, desc_col),
+                aura_description: str_at(&spells_set, r, aura_desc_col),
                 duration_index: u32_at(r, COL_DURATION_INDEX).unwrap_or(0),
                 casting_time_index: u32_at(r, COL_CASTING_TIME_INDEX).unwrap_or(0),
                 proc_chance: u32_at(r, COL_PROC_CHANCE).unwrap_or(0),

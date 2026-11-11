@@ -160,11 +160,11 @@ fn talent_schema() -> Schema {
     s
 }
 
-fn talent_tab_schema() -> Schema {
+fn talent_tab_schema(name_col: usize) -> Schema {
     let mut s = Schema::new("TalentTab");
     for i in 0..TALENT_TAB_FIELDS {
-        if i == COL_TT_NAME_ENUS {
-            s.add_field(SchemaField::new("NameEnUs", FieldType::String));
+        if i == name_col {
+            s.add_field(SchemaField::new("NameLocale", FieldType::String));
         } else if i == COL_TT_BACKGROUND {
             s.add_field(SchemaField::new("BackgroundFile", FieldType::String));
         } else {
@@ -179,13 +179,14 @@ pub fn load_talent_catalog(chain: &mut impl FileSource) -> Result<TalentCatalog>
     let tab_bytes = chain
         .read_file(TALENT_TAB)
         .context("reading TalentTab.dbc")?;
-    let tab_set = parse(&tab_bytes, talent_tab_schema(), "TalentTab.dbc")?;
+    let name_col = crate::dbc::detect_locale_column(&tab_bytes, COL_TT_NAME_ENUS);
+    let tab_set = parse(&tab_bytes, talent_tab_schema(name_col), "TalentTab.dbc")?;
     let mut tabs = Vec::new();
     for r in tab_set.records() {
         let Some(id) = u32_at(r, 0) else { continue };
         tabs.push(TalentTabInfo {
             id,
-            name: str_at(&tab_set, r, COL_TT_NAME_ENUS).unwrap_or_default(),
+            name: str_at(&tab_set, r, name_col).unwrap_or_default(),
             race_mask: u32_at(r, COL_TT_RACE_MASK).unwrap_or(0),
             class_mask: u32_at(r, COL_TT_CLASS_MASK).unwrap_or(0),
             background: str_at(&tab_set, r, COL_TT_BACKGROUND).unwrap_or_default(),
