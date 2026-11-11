@@ -12,7 +12,7 @@ gateway. Native compilation remains available. Mobile support is not included.
 - Browser login, character selection and the streamed game world.
 - The shared Lua/FrameXML interface, rendering, movement and browser audio.
 - A Rust gateway for installed-client assets and auth/world WebSocket relays.
-- English and Russian locale selection, including the pre-login loading screen.
+- English, French and Russian locale selection, including the pre-login loading screen.
 
 The browser talks to the gateway; the gateway connects to your configured vanilla
 server. Game data stays in your installed client and is not bundled into the WASM.
@@ -55,10 +55,20 @@ saved locally; changing it reloads the page so asset requests, interface resourc
 and authentication use the same locale. Available choices depend on the language
 data in the client installation served by the gateway.
 
-Browser-owned loading messages live in [`web/localization.js`](web/localization.js).
+Browser-owned messages live in [`web/i18n.js`](web/i18n.js) and its locale catalogs.
 They use the saved locale from the beginning of page loading, before the game UI
 exists. Resource paths and filenames are displayed unchanged. Original in-game
 translations continue to come from the selected installed-client resources.
+
+## Browser-local add-ons
+
+The game page links to [`/addons.html`](web/addons.html), where add-on ZIP files
+are stored in this browser profile's IndexedDB. They are never uploaded or shared
+with the server. [`web/local-addons-sw.js`](web/local-addons-sw.js) merges the
+local catalog with the server-provided catalog and serves the local files to the
+client. After installing an add-on, reload the game page and enable it in the
+character-selection AddOns screen. Add-ons can also be enabled or disabled in
+the in-game Options AddOns tab.
 
 ## Status
 
