@@ -67,6 +67,12 @@ fn install_boot_vm(world: &mut World) {
     };
     #[cfg(target_arch = "wasm32")]
     script.set_locale(&crate::web_config::active_locale());
+    if let Some(request) = world
+        .get_resource::<crate::char_select::AddonsListRequest>()
+        .cloned()
+    {
+        script.set_addons_list_opener(Box::new(move || request.request()));
+    }
     #[cfg(target_arch = "wasm32")]
     script.set_local_addons_opener(Box::new(|| crate::web_config::open_local_addons_page()));
     seed_vm_clock(world, &mut script);

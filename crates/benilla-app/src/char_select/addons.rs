@@ -1,5 +1,6 @@
-//! The **character-select AddOns screen** (decisions 1197, 1293) — the one addon surface (the
-//! in-game panel was retired at the director's call, 2026-08-14; `ReloadUI` itself stays).
+//! The **native AddOns screen** (decisions 1197, 1293), opened from both character select and the
+//! in-game Options page. The latter reuses this multi-character view rather than duplicating its
+//! enable-state logic; saving there also synchronizes the active character's live UI model.
 //!
 //! The reference is `Interface\GlueXML\AddonList.xml/.lua`, read off the player's own patch chain
 //! (`patch.MPQ` — 1293 located it after 1197 believed it missing), and **this screen now draws the
@@ -45,8 +46,8 @@
 //! to run once per roster character, which decision 2311 retired along with the per-character
 //! `installed()` it was there to feed.
 
-use bevy::prelude::*;
 use bevy::ui_render::ui_material::MaterialNode;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use benilla_ui::script::addon_gate::{can_load, GateRow, Verdict};
 use benilla_ui::script::UiScript;
@@ -298,6 +299,23 @@ impl AddonsPanel {
                 .collect();
             addons::write_enable_state(Some(&id), &states);
         }
+    }
+
+    fn sync_character_to_script(&self, script: &mut UiScript, name: &str) -> bool {
+        let Some(character) = self
+            .chars
+            .iter()
+            .position(|character| character.eq_ignore_ascii_case(name))
+        else {
+            return false;
+        };
+        let Some(states) = self.staged.get(character) else {
+            return false;
+        };
+        for (addon, enabled) in self.list.iter().zip(states) {
+            script.set_addon_enabled(&addon.name, *enabled);
+        }
+        true
     }
 
     /// Are there any installed addons at all? The reference hides its button when not
@@ -566,6 +584,12 @@ struct AddonsUi;
 #[derive(Component)]
 pub(super) struct ScrollBand;
 
+#[derive(SystemParam)]
+pub(super) struct AddonsPanelContext<'w> {
+    roster: Res<'w, super::Roster>,
+    state: Res<'w, State<super::ClientState>>,
+}
+
 /// Spawn/despawn the panel, run its flows, and repaint when anything it shows has changed.
 ///
 /// Ordered before the select screen's own click handling so a click that lands on the panel is
@@ -573,6 +597,7 @@ pub(super) struct ScrollBand;
 pub(super) fn drive_addons_panel(
     mut commands: Commands,
     mut panel: ResMut<AddonsPanel>,
+    context: AddonsPanelContext,
     art: Res<GlueArt>,
     assets: Res<AssetServer>,
     strings: Option<Res<GlueStrings>>,
@@ -709,6 +734,18 @@ pub(super) fn drive_addons_panel(
         // `AddonList_OnOk` / `AddonList_OnCancel` play the realm dialog's pair.
         sounds.write(GlueSound("gsLoginChangeRealmOK"));
         panel.save_staged();
+        if *context.state.get() == super::ClientState::InWorld {
+            if let (Some(script), Some(character)) =
+                (script.as_deref_mut(), context.roster.selected_char())
+            {
+                if !panel.sync_character_to_script(script, &character.name) {
+                    warn!(
+                        "addons: saved AddOn List but could not sync {} to the in-game UI model",
+                        character.name
+                    );
+                }
+            }
+        }
         panel.close();
         return;
     }

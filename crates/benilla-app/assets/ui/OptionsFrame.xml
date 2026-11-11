@@ -485,19 +485,22 @@
         function OptionsGameTab_OnClick()
             OptionsTab_SetState("Game", true)
             OptionsTab_SetState("AddOns", false)
+            OptionsAddOns_Cancel()
             local addonsPage = getglobal("BenillaOptionsFrameContainerBodyAddOns")
             if addonsPage then addonsPage:Hide() end
             local addLocal = getglobal("BenillaOptionsFrameContainerAddOnsAdd")
             if addLocal then addLocal:Hide() end
+            OptionsAddOns_SetControlsVisible(false)
             local defaults = getglobal("BenillaOptionsFrameContainerDefaults")
             if defaults then defaults:Show() end
             BenillaOptionsFrameSearchBox:Show()
             BenillaOptionsFrame_SelectCategory(BenillaOptionsFrame.lastGameCategory or "Controls")
         end
 
-        -- The AddOns page: hide every CVar body, show the addon list, swap the tab plates,
-        -- hide the search box and Defaults; the "Ajouter" button opens the local store page.
+        -- The AddOns page stages this character's addon changes until Apply; the browser-local
+        -- installer stays available beside the bulk controls.
         function OptionsAddOnsTab_OnClick()
+            local alreadySelected = BenillaOptionsFrame.selectedCategory == "AddOns"
             OptionsTab_SetState("Game", false)
             OptionsTab_SetState("AddOns", true)
             BenillaOptionsFrame.selectedCategory = "AddOns"
@@ -517,7 +520,88 @@
             BenillaOptionsFrameContainerDefaults:Hide()
             BenillaOptionsFrameContainerUnbind:Hide()
             BenillaOptionsFrameContainerAddOnsAdd:Show()
+            OptionsAddOns_SetControlsVisible(true)
             BenillaOptionsFrameSearchBox:Hide()
+            if not alreadySelected then OptionsAddOns_Refresh() end
+        end
+
+        OPTIONS_ADDON_STAGED = {}
+        OPTIONS_ADDON_BASELINE = {}
+
+        function OptionsAddOns_SetControlsVisible(visible)
+            for _, name in ipairs({"EnableAll", "DisableAll", "Apply", "Cancel", "FullList"}) do
+                local button = getglobal("BenillaOptionsFrameContainerBodyAddOns" .. name)
+                if button then
+                    if visible then button:Show() else button:Hide() end
+                end
+            end
+        end
+
+        function OptionsAddOns_UpdateActions()
+            local dirty = false
+            for i = 1, table.getn(OPTIONS_ADDON_BASELINE) do
+                if OPTIONS_ADDON_STAGED[i] ~= OPTIONS_ADDON_BASELINE[i] then
+                    dirty = true
+                    break
+                end
+            end
+            local hasAddons = table.getn(OPTIONS_ADDON_BASELINE) > 0
+            local enableAll = BenillaOptionsFrameContainerBodyAddOnsEnableAll
+            local disableAll = BenillaOptionsFrameContainerBodyAddOnsDisableAll
+            local apply = BenillaOptionsFrameContainerBodyAddOnsApply
+            local cancel = BenillaOptionsFrameContainerBodyAddOnsCancel
+            if hasAddons then
+                enableAll:Enable()
+                disableAll:Enable()
+            else
+                enableAll:Disable()
+                disableAll:Disable()
+            end
+            if dirty then
+                apply:Enable()
+                cancel:Enable()
+            else
+                apply:Disable()
+                cancel:Disable()
+            end
+        end
+
+        function OptionsAddOns_SetAll(enabled)
+            local count = BenillaGetNumAddOns or GetNumAddOns
+            for i = 1, count() do
+                OPTIONS_ADDON_STAGED[i] = enabled and true or false
+                OptionsAddOns_UpdateRow(OPTIONS_ADDON_POOL[i], i)
+            end
+            OptionsAddOns_UpdateActions()
+        end
+
+        -- Stage edits until Apply; leaving the page or choosing Cancel discards them.
+        function OptionsAddOns_Cancel()
+            if not OPTIONS_ADDON_BASELINE then return end
+            OPTIONS_ADDON_STAGED = {}
+            for i, enabled in ipairs(OPTIONS_ADDON_BASELINE) do
+                OPTIONS_ADDON_STAGED[i] = enabled
+                if OPTIONS_ADDON_POOL[i] then
+                    OptionsAddOns_UpdateRow(OPTIONS_ADDON_POOL[i], i)
+                end
+            end
+            OptionsAddOns_UpdateActions()
+        end
+
+        function OptionsAddOns_Apply()
+            local count = BenillaGetNumAddOns or GetNumAddOns
+            local info = BenillaGetAddOnInfo or GetAddOnInfo
+            for i = 1, count() do
+                local name = info(i)
+                if OPTIONS_ADDON_STAGED[i] ~= OPTIONS_ADDON_BASELINE[i] then
+                    if OPTIONS_ADDON_STAGED[i] then
+                        EnableAddOn(name)
+                    else
+                        DisableAddOn(name)
+                    end
+                    OPTIONS_ADDON_BASELINE[i] = OPTIONS_ADDON_STAGED[i]
+                end
+            end
             OptionsAddOns_Refresh()
         end
 
@@ -535,7 +619,7 @@
             local label = getglobal(row:GetName() .. "Label")
             label:SetText(title or name)
             local check = getglobal(row:GetName() .. "Check")
-            check:SetChecked(enabled and true or false)
+            check:SetChecked(OPTIONS_ADDON_STAGED[i] and true or false)
             local status = getglobal(row:GetName() .. "Status")
             if reason then
                 local token = getglobal("ADDON_" .. reason)
@@ -548,12 +632,9 @@
         function OptionsAddOnRow_OnClick(check)
             local row = check:GetParent()
             if not row.addonName then return end
-            if check:GetChecked() then
-                EnableAddOn(row.addonName)
-            else
-                DisableAddOn(row.addonName)
-            end
+            OPTIONS_ADDON_STAGED[row.index] = check:GetChecked() and true or false
             OptionsAddOns_UpdateRow(row, row.index)
+            OptionsAddOns_UpdateActions()
         end
 
         function OptionsAddOnRow_Hover(row, on)
@@ -577,6 +658,15 @@
             local body = getglobal("BenillaOptionsFrameContainerBodyAddOns")
             local count = BenillaGetNumAddOns or GetNumAddOns
             local n = count()
+            local info = BenillaGetAddOnInfo or GetAddOnInfo
+            OPTIONS_ADDON_STAGED = {}
+            OPTIONS_ADDON_BASELINE = {}
+            for i = 1, n do
+                local _, _, _, enabled = info(i)
+                local state = enabled and true or false
+                OPTIONS_ADDON_STAGED[i] = state
+                OPTIONS_ADDON_BASELINE[i] = state
+            end
             local empty = getglobal("BenillaOptionsFrameContainerBodyAddOnsEmpty")
             if empty then
                 if n == 0 then empty:Show() else empty:Hide() end
@@ -598,12 +688,13 @@
                     row:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -9)
                     row:SetPoint("TOPRIGHT", prev, "BOTTOMRIGHT", 0, -9)
                 else
-                    row:SetPoint("TOPLEFT", body, "TOPLEFT", 10, -12)
-                    row:SetPoint("TOPRIGHT", body, "TOPRIGHT", -20, -12)
+                    row:SetPoint("TOPLEFT", body, "TOPLEFT", 10, -66)
+                    row:SetPoint("TOPRIGHT", body, "TOPRIGHT", -20, -66)
                 end
                 row:Show()
                 prev = row
             end
+            OptionsAddOns_UpdateActions()
             BenillaOptionsFrameContainerScroll:SetVerticalScroll(0)
         end
 
@@ -650,6 +741,8 @@
             local addonsPage = getglobal("BenillaOptionsFrameContainerBodyAddOns")
             if addonsPage then addonsPage:Hide() end
             BenillaOptionsFrameContainerAddOnsAdd:Hide()
+            OptionsAddOns_Cancel()
+            OptionsAddOns_SetControlsVisible(false)
             BenillaOptionsFrameContainerDefaults:Show()
             BenillaOptionsFrameSearchBox:Show()
             if BenillaOptionsFrameSearchBox:GetText() ~= "" then
@@ -2817,8 +2910,8 @@
                                 </Layer>
                             </Layers>
                             <Frames>
-                                <!-- The AddOns page (new): no XML rows — OptionsAddOns_Refresh
-                                     creates/reuses the runtime registry rows under this frame. -->
+                                <!-- The AddOns page rows come from the runtime registry; the
+                                     controls below stage edits for this character. -->
                                 <Frame name="$parentAddOns" hidden="true">
                                     <Anchors>
                                         <Anchor point="TOPLEFT"/>
@@ -2827,12 +2920,47 @@
                                     <Layers>
                                         <Layer level="OVERLAY">
                                             <FontString name="$parentEmpty" inherits="GameFontHighlightLarge" justifyH="LEFT" text="Aucun addon installé.">
-                                                <Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="17" y="-28"/></Offset></Anchor></Anchors>
+                                                <Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="17" y="-66"/></Offset></Anchor></Anchors>
+                                            </FontString>
+                                            <FontString name="$parentApplyNote" inherits="GameFontNormalSmall" justifyH="LEFT" text="Les changements prennent effet à la prochaine connexion.">
+                                                <Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="10" y="-40"/></Offset></Anchor></Anchors>
                                             </FontString>
                                         </Layer>
                                     </Layers>
                                 </Frame>
-                                <!-- The Controls page (0961): the gameplay checkboxes with benilla
+                                <Button name="$parentAddOnsEnableAll" inherits="OptionsRedButtonTemplate" text="Tout activer" hidden="true">
+                                    <Size><AbsDimension x="92" y="22"/></Size>
+                                    <Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="10" y="-8"/></Offset></Anchor></Anchors>
+                                    <Scripts><OnClick>OptionsAddOns_SetAll(true)</OnClick></Scripts>
+                                </Button>
+                                <Button name="$parentAddOnsDisableAll" inherits="OptionsRedButtonTemplate" text="Tout désactiver" hidden="true">
+                                    <Size><AbsDimension x="104" y="22"/></Size>
+                                    <Anchors><Anchor point="LEFT" relativeTo="$parentAddOnsEnableAll" relativePoint="RIGHT"><Offset><AbsDimension x="4" y="0"/></Offset></Anchor></Anchors>
+                                    <Scripts><OnClick>OptionsAddOns_SetAll(false)</OnClick></Scripts>
+                                </Button>
+                                <Button name="$parentAddOnsApply" inherits="OptionsRedButtonTemplate" text="Appliquer" hidden="true">
+                                    <Size><AbsDimension x="82" y="22"/></Size>
+                                    <Anchors><Anchor point="LEFT" relativeTo="$parentAddOnsDisableAll" relativePoint="RIGHT"><Offset><AbsDimension x="4" y="0"/></Offset></Anchor></Anchors>
+                                    <Scripts><OnLoad>self:Disable()</OnLoad><OnClick>OptionsAddOns_Apply()</OnClick></Scripts>
+                                </Button>
+                                <Button name="$parentAddOnsCancel" inherits="OptionsRedButtonTemplate" text="Annuler" hidden="true">
+                                    <Size><AbsDimension x="76" y="22"/></Size>
+                                    <Anchors><Anchor point="LEFT" relativeTo="$parentAddOnsApply" relativePoint="RIGHT"><Offset><AbsDimension x="4" y="0"/></Offset></Anchor></Anchors>
+                                    <Scripts><OnLoad>self:Disable()</OnLoad><OnClick>OptionsAddOns_Cancel()</OnClick></Scripts>
+                                </Button>
+                                <Button name="$parentAddOnsFullList" inherits="OptionsRedButtonTemplate" text="Liste complète" hidden="true">
+                                    <Size><AbsDimension x="120" y="22"/></Size>
+                                    <Anchors><Anchor point="LEFT" relativeTo="$parentAddOnsCancel" relativePoint="RIGHT"><Offset><AbsDimension x="4" y="0"/></Offset></Anchor></Anchors>
+                                    <Scripts>
+                                        <OnClick>
+                                            OptionsAddOns_Cancel()
+                                            if not OpenAddonsList or not OpenAddonsList() then
+                                                ChatFrame1:AddMessage("La liste AddOn List n'est pas disponible.", 1, 1, 1)
+                                            end
+                                        </OnClick>
+                                    </Scripts>
+                                </Button>
+                                                <!-- The Controls page (0961): the gameplay checkboxes with benilla
                                      knobs behind them, in the era Controls page's own row order
                                      (Controls.lua @1.15.9: Sticky Targeting #1, Auto Loot #6,
                                      Invert Mouse #12 — its Mouse section header is cut while one

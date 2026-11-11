@@ -111,6 +111,15 @@ pub(super) fn install(lua: &mut Vm) -> benilla_lua::Result<()> {
         })
     })?;
 
+    // The host opens the same full AddOn List used at character select.
+    lua.register_function("OpenAddonsList", |lua, ()| {
+        let model = lua.app_data_ref::<Model>().expect("model app_data");
+        Ok(match &model.addons_list_opener {
+            Some(opener) => opener(),
+            None => false,
+        })
+    })?;
+
     // **`FrameXML_Debug([v])` — the XML loader's own trace switch, get-or-set** (decision 2160,
     // wow-re `ui/scratch/framexml-debug-trace-flag.md`). `0x488440` reads the global `[0xceea30]`
     // through `0x6edb40`, and:
@@ -349,6 +358,18 @@ impl super::UiScript {
     pub fn set_framerate(&mut self, fps: f64) {
         self.model_mut().framerate = fps;
     }
+
+    /// Keep a live addon's in-memory enable bit in step with the character AddOn List.
+    pub fn set_addon_enabled(&mut self, name: &str, enabled: bool) {
+        if let Some(addon) = self
+            .model_mut()
+            .addons
+            .iter_mut()
+            .find(|addon| addon.name.eq_ignore_ascii_case(name))
+        {
+            addon.enabled = enabled;
+        }
+    }
 }
 
 impl super::UiScript {
@@ -358,11 +379,16 @@ impl super::UiScript {
     pub fn set_local_addons_opener(&mut self, opener: Box<dyn Fn() -> bool + Send + Sync>) {
         self.model_mut().local_addons_opener = Some(opener);
     }
+
+    /// Install the host callback that opens the full AddOn List from the in-game Options page.
+    pub fn set_addons_list_opener(&mut self, opener: Box<dyn Fn() -> bool + Send + Sync>) {
+        self.model_mut().addons_list_opener = Some(opener);
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::script::UiScript;
+    use crate::script::{addon::AddOnInfo, UiScript};
 
     /// `GetBuildInfo` answers as the 1.12.1 client: **three strings, and no fourth value.**
     ///
@@ -512,6 +538,36 @@ mod tests {
         assert!(
             !s.model_ref().european_numbers.get(),
             "the string arm, not Lua truthiness"
+        );
+    }
+
+    #[test]
+    fn full_addon_list_opener_is_host_supplied() {
+        let mut s = UiScript::new().unwrap();
+        assert!(!s.eval::<bool>("return OpenAddonsList()").unwrap());
+        s.set_addons_list_opener(Box::new(|| true));
+        assert!(s.eval::<bool>("return OpenAddonsList()").unwrap());
+    }
+
+    #[test]
+    fn native_addon_list_updates_the_live_enable_state() {
+        let mut s = UiScript::new().unwrap();
+        s.register_addons(
+            vec![AddOnInfo {
+                name: "ExampleAddon".into(),
+                enabled: true,
+                ..AddOnInfo::default()
+            }],
+            None,
+            None,
+            None,
+        );
+
+        s.set_addon_enabled("exampleaddon", false);
+
+        assert_eq!(
+            s.addon_enable_states(),
+            vec![("ExampleAddon".into(), false)]
         );
     }
 }

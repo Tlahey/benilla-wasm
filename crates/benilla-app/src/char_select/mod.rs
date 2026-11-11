@@ -34,6 +34,11 @@ use bevy::prelude::*;
 
 use crate::glue_strings::GlueStrings;
 
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+
 use crate::net::{
     CharActionResultMessage, CharListMessage, CharPick, CharRequest, CharacterLoginFailedMessage,
     EnteredWorldMessage, LoggedOutMessage,
@@ -79,6 +84,21 @@ pub(crate) enum ClientState {
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct InWorldGated;
 
+/// Thread-safe handoff from the in-game Lua options page to the native AddOn List overlay.
+#[derive(Resource, Clone, Default)]
+pub(crate) struct AddonsListRequest(Arc<AtomicBool>);
+
+impl AddonsListRequest {
+    pub(crate) fn request(&self) -> bool {
+        self.0.store(true, Ordering::Release);
+        true
+    }
+
+    fn take(&self) -> bool {
+        self.0.swap(false, Ordering::AcqRel)
+    }
+}
+
 /// The character-select subsystem: the state machine + the select screen.
 pub(crate) struct CharSelectPlugin {
     /// The screen this session opens on.
@@ -105,6 +125,37 @@ fn publish_world_live(
     }
 }
 
+fn open_requested_addons_list(
+    request: Res<AddonsListRequest>,
+    roster: Res<Roster>,
+    mut panel: ResMut<addons::AddonsPanel>,
+    mut script: Option<NonSendMut<benilla_ui::script::UiScript>>,
+) {
+    if !request.take() || panel.open {
+        return;
+    }
+    let Some(realm) = roster.realm.as_ref() else {
+        error!("addons: cannot open AddOn List without a selected realm");
+        return;
+    };
+    let Some(character) = roster.selected_char() else {
+        error!("addons: cannot open AddOn List without a selected character");
+        return;
+    };
+    let identity = (realm.name.clone(), character.name.clone());
+    let Some(script) = script.as_deref_mut() else {
+        error!("addons: cannot open AddOn List without the in-game UI script");
+        return;
+    };
+    crate::ui_script::addons::save_enable_state(script, Some(&identity));
+    let characters = roster
+        .chars
+        .iter()
+        .map(|character| character.name.clone())
+        .collect();
+    panel.open_for(realm.name.clone(), characters);
+}
+
 impl Plugin for CharSelectPlugin {
     fn build(&self, app: &mut App) {
         app.insert_state(self.start)
@@ -121,6 +172,7 @@ impl Plugin for CharSelectPlugin {
             )
             .init_resource::<dialog::DeleteDialog>()
             .init_resource::<addons::AddonsPanel>()
+            .init_resource::<AddonsListRequest>()
             .add_systems(
                 OnEnter(ClientState::CharSelect),
                 (screen::enter_select, stamp_select_entry),
@@ -182,6 +234,15 @@ impl Plugin for CharSelectPlugin {
                 )
                     .chain()
                     .after(benilla_world::schedule::WorldStage::Net),
+            )
+            .add_systems(
+                Update,
+                (open_requested_addons_list, addons::drive_addons_panel)
+                    .chain()
+                    .after(crate::ui_script::UiInput)
+                    .before(crate::glue::GlueVisuals)
+                    .after(benilla_world::schedule::WorldStage::Net)
+                    .run_if(in_state(ClientState::InWorld)),
             )
             // AFTER the cover's own stage, so the raise it reads is this frame's — see the
             // system's doc for why the glue must yield the glass the moment the cover goes up.

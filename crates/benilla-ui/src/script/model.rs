@@ -135,6 +135,8 @@ pub(crate) struct Model {
     /// The host's browser opener for the local addon page (the in-game Options AddOns page's
     /// "Ajouter localement" button). `None` on native or in a VM with no browser host.
     pub(crate) local_addons_opener: Option<Box<dyn Fn() -> bool + Send + Sync>>,
+    /// The host's opener for the full AddOn List overlay, reachable from in-game Options.
+    pub(crate) addons_list_opener: Option<Box<dyn Fn() -> bool + Send + Sync>>,
     /// The host's font engine ([`super::UiScript::set_text_measurer`]) — what lets a metric read
     /// answer inside the Lua call that asked, instead of a frame later. `None` in every VM without
     /// a font atlas, which is the measure round-trip's own world and behaves exactly as it did.
@@ -1970,6 +1972,7 @@ impl Model {
             addons_chain_reader: None,
             addons_loose_reader: None,
             local_addons_opener: None,
+            addons_list_opener: None,
             measurer: None,
             texture_probe: None,
             texture_size_probe: None,

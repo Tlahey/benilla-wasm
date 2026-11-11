@@ -4570,6 +4570,7 @@ fn the_two_option_tabs_fit_their_labels_at_the_drawn_scale() {
 #[test]
 fn the_addons_tab_switches_from_game_settings_and_shows_the_local_installer() {
     let mut s = harness();
+    s.set_addons_list_opener(Box::new(|| true));
     s.run("ShowUIPanel(BenillaOptionsFrame) BenillaOptionsFrameAddOnsTab:Click()")
         .unwrap();
 
@@ -4584,6 +4585,15 @@ fn the_addons_tab_switches_from_game_settings_and_shows_the_local_installer() {
     assert!(s
         .eval::<bool>("return BenillaOptionsFrameContainerAddOnsAdd:IsVisible()")
         .unwrap());
+    for action in ["EnableAll", "DisableAll", "Apply", "Cancel", "FullList"] {
+        assert!(s
+            .eval::<bool>(&format!(
+                "return BenillaOptionsFrameContainerBodyAddOns{action}:IsVisible()"
+            ))
+            .unwrap());
+    }
+    s.run("BenillaOptionsFrameContainerBodyAddOnsFullList:Click()")
+        .unwrap();
     assert_eq!(
         s.eval::<String>("return BenillaOptionsFrameContainerTitle:GetText()")
             .unwrap(),
@@ -4594,9 +4604,92 @@ fn the_addons_tab_switches_from_game_settings_and_shows_the_local_installer() {
     assert!(!s
         .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOns:IsVisible()")
         .unwrap());
+    assert!(!s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsEnableAll:IsVisible()")
+        .unwrap());
     assert!(s
         .eval::<bool>("return BenillaOptionsFrameCategoryList:IsVisible()")
         .unwrap());
+    assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
+}
+
+#[test]
+fn addon_options_stage_bulk_changes_until_apply_or_cancel() {
+    let mut s = harness();
+    s.run(
+        r#"
+        ADDON_TEST_STATE = { Alpha = true, Beta = false }
+        BenillaGetNumAddOns = function() return 2 end
+        BenillaGetAddOnInfo = function(i)
+            local name = i == 1 and "Alpha" or "Beta"
+            return name, name, nil, ADDON_TEST_STATE[name] and 1 or nil, 1, nil
+        end
+        EnableAddOn = function(name) ADDON_TEST_STATE[name] = true end
+        DisableAddOn = function(name) ADDON_TEST_STATE[name] = false end
+        ShowUIPanel(BenillaOptionsFrame)
+        BenillaOptionsFrameAddOnsTab:Click()
+        "#,
+    )
+    .unwrap();
+
+    assert!(s
+        .eval::<bool>("return BenillaOptionsAddOnRow1Check:GetChecked()")
+        .unwrap());
+    assert!(!s
+        .eval::<bool>("return BenillaOptionsAddOnRow2Check:GetChecked()")
+        .unwrap());
+
+    s.run(
+        "BenillaOptionsAddOnRow1Check:SetChecked(false) \
+         OptionsAddOnRow_OnClick(BenillaOptionsAddOnRow1Check)",
+    )
+    .unwrap();
+    assert!(s.eval::<bool>("return ADDON_TEST_STATE.Alpha").unwrap());
+    assert!(s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
+        .unwrap());
+
+    s.run("BenillaOptionsFrameContainerBodyAddOnsCancel:Click()")
+        .unwrap();
+    assert!(s
+        .eval::<bool>("return BenillaOptionsAddOnRow1Check:GetChecked()")
+        .unwrap());
+    assert!(!s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
+        .unwrap());
+
+    s.run(
+        "BenillaOptionsAddOnRow1Check:SetChecked(false) \
+         OptionsAddOnRow_OnClick(BenillaOptionsAddOnRow1Check) \
+         BenillaOptionsFrameGameTab:Click() \
+         BenillaOptionsFrameAddOnsTab:Click()",
+    )
+    .unwrap();
+    assert!(s
+        .eval::<bool>("return BenillaOptionsAddOnRow1Check:GetChecked()")
+        .unwrap());
+    assert!(!s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
+        .unwrap());
+
+    s.run(
+        "BenillaOptionsFrameContainerBodyAddOnsDisableAll:Click() \
+         BenillaOptionsFrameContainerBodyAddOnsApply:Click()",
+    )
+    .unwrap();
+    assert!(!s.eval::<bool>("return ADDON_TEST_STATE.Alpha").unwrap());
+    assert!(!s.eval::<bool>("return ADDON_TEST_STATE.Beta").unwrap());
+    assert!(!s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodyAddOnsApply:IsEnabled() ~= 0")
+        .unwrap());
+
+    s.run(
+        "BenillaOptionsFrameContainerBodyAddOnsEnableAll:Click() \
+         BenillaOptionsFrameContainerBodyAddOnsApply:Click()",
+    )
+    .unwrap();
+    assert!(s.eval::<bool>("return ADDON_TEST_STATE.Alpha").unwrap());
+    assert!(s.eval::<bool>("return ADDON_TEST_STATE.Beta").unwrap());
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 

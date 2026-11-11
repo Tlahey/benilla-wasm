@@ -1052,7 +1052,7 @@ pub(crate) fn write_enable_state(identity: Option<&(String, String)>, states: &[
 /// contents plus this session's toggles. Two things followed from the difference, both reproduced
 /// before the change: a row for an addon not installed this session was dropped, and every name
 /// was rewritten into its folder's case rather than the spelling the file already had.
-pub(super) fn save_enable_state(script: &UiScript, identity: Option<&(String, String)>) {
+pub(crate) fn save_enable_state(script: &UiScript, identity: Option<&(String, String)>) {
     let states = script.addon_enable_states();
     if states.is_empty() {
         return; // nothing was ever registered — a glue-only run or a capture; nothing to merge in
