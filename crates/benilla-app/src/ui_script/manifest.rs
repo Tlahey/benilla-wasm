@@ -329,19 +329,6 @@ pub(crate) fn load_ingame_ui(
         &mut *script,
         Addon::builtin().toc.files.get(1..).unwrap_or_default(),
     );
-    // Closing a browser tab is not a game-menu action. Keep the shared menu and
-    // native Quit path, but remove its browser seat before third-party addons load.
-    #[cfg(target_arch = "wasm32")]
-    if let Err(error) = script.run(
-        r#"
-        GameMenuButtonQuit:Hide()
-        GameMenuButtonContinue:ClearAllPoints()
-        GameMenuButtonContinue:SetPoint("TOPLEFT", GameMenuButtonLogout, "BOTTOMLEFT", 0, -20)
-        GameMenuFrame:SetHeight(246)
-    "#,
-    ) {
-        failures.push(format!("browser game-menu layout: {error}"));
-    }
     failures.extend(bootstrap_positions(script));
     // `&mut` from here down: each addon's `ADDON_LOADED` fires as that addon finishes, which is
     // the reference's own interleaving (`0x51f5ad`, per addon) rather than a batch at the end.

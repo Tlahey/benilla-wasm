@@ -27,8 +27,8 @@
 //!   (`[0x80abfc]`), projected per frame (`0x483ee0`); the plate's **TOP-CENTER** lands on the
 //!   point (it hangs below — §8 Q5) and is edge-clamped half a plate inside the screen;
 //!   **constant screen size**: the geometry globals `[0x87d9cc]=0.1` × `[0x87d9d0]=0.025` in gx
-//!   screencoord units, where one unit = the screen **diagonal** `√(W²+H²)` (§8 Q4 — and never
-//!   uiScale: plates live outside the UIParent cascade). **Our basis is growth-damped** past
+//!   screencoord units, where one unit = the screen **diagonal** `√(W²+H²)` (§8 Q4).
+//!   **Our basis is growth-damped** past
 //!   [`PLATE_DIAG_KNEE`] — a director-pinned deviation (0185/0186): the real client grows
 //!   plates diagonal-linear without limit (§9, byte-closed) and the director rejected that
 //!   look; past 1024×768 the plate grows at half the real rate (midway between faithful and
@@ -272,8 +272,9 @@ const PLATE_DIAG_KNEE: f32 = 1280.0;
 const PLATE_GROWTH_DAMP: f32 = 0.5;
 
 /// One gx screencoord unit = the screen **DIAGONAL** `√(W²+H²)` (§8 Q4 — the device space spans
-/// `[0,G44]×[0,G48]`, the live aspect basis; uiScale never enters: plates anchor WorldFrame-side,
-/// outside the UIParent cascade) — growth damped past [`PLATE_DIAG_KNEE`] (the director's pin).
+/// `[0,G44]×[0,G48]`, the live aspect basis — growth damped past [`PLATE_DIAG_KNEE`] (the
+/// director's pin). The shared helpers below apply the global uiScale to this WorldFrame-side
+/// overlay as well.
 /// Shared with the chat bubble ([`crate::chat_bubble`]) — the sibling outside-UIParent overlay,
 /// same basis law so bubble text and plate text hold the same em at every window.
 pub(crate) fn plate_basis(viewport: Vec2) -> f32 {
@@ -291,6 +292,10 @@ pub(crate) fn gx_px(v: f32, basis: f32) -> f32 {
     (v * basis).round()
 }
 
+pub(crate) fn scaled_gx_px(v: f32, basis: f32, ui_scale: f32) -> f32 {
+    gx_px(v, basis) * ui_scale
+}
+
 /// Plate FontString height → the FreeType em: `min(32, round(h · basis))`. The real client's
 /// law is **byte-closed end to end** (wow-re `25cfa33e` + §9 Q3: the FontObject bridge
 /// `0x44d040` divides the gx height by G48 before `GxuFontCreate`, the raster `0x5ca030`
@@ -300,6 +305,10 @@ pub(crate) fn gx_px(v: f32, basis: f32) -> f32 {
 /// Shared with the chat bubble (`NAMEPLATE_FONT` at the same 0.01 gx), like [`plate_basis`].
 pub(crate) fn text_px(h: f32, basis: f32) -> f32 {
     (h * basis).round().min(32.0)
+}
+
+pub(crate) fn scaled_text_px(h: f32, basis: f32, ui_scale: f32) -> f32 {
+    text_px(h, basis) * ui_scale
 }
 
 /// **The FrameXML mirror of the two toggles** — `NAMEPLATES_ON` and `FRIENDNAMEPLATES_ON`
@@ -505,7 +514,7 @@ fn drive_vplates(
         return;
     };
     let basis = plate_basis(viewport);
-    let gx = |v: f32| gx_px(v, basis);
+    let gx = |v: f32| scaled_gx_px(v, basis, ui_scale.0);
     let window = world.window.single().ok();
     // **The mouselook toggle** (`0x60f830`, called from `0x483e80`/`0x483e70`): plates stop taking
     // the mouse while the camera is in freelook, so a right-drag that starts over a plate turns the
@@ -777,12 +786,9 @@ fn drive_vplates(
         // shared frame→quad path draws and an addon can read, hook, restyle or take over.
         //
         // The seam scale (`windowH/768 × uiScale`) converts our window px into the FrameXML units
-        // the widget layer speaks. Dividing it out here is deliberate and is a DIVERGENCE worth
-        // naming: the reference's plates are outside the `uiScale` cascade (uiScale is
-        // `UIParent`'s own frame scale there, and the WorldFrame is a sibling root), while
-        // benilla folds uiScale into one global seam (0582/0584). Until that seam grows a
-        // per-cascade answer, the driver compensates, so a plate's PIXELS stay uiScale-blind the
-        // way the reference's are.
+        // the widget layer speaks. The basis above applies uiScale to this WorldFrame-side overlay
+        // too; dividing through the seam here preserves its screen anchor while the rendered
+        // plate geometry and text follow the global interface scale.
         // The raid-target board (decision 0434 §6): 1-based here, 0-based for the atlas cell.
         let mark = group.raid_target_index(guid.0);
         let x_units = (plate.min.x + plate.max.x) * 0.5 / seam;
@@ -863,12 +869,12 @@ fn drive_vplates(
             level_off_y: gx(LEVEL_OFF_Y) / seam,
             skull_size: gx(SKULL_SIZE) / seam,
             raid_size: gx(RAID_ICON_SIZE) / seam,
-            name_height: text_px(NAME_H, basis) / seam,
-            level_height: text_px(LEVEL_H, basis) / seam,
+            name_height: scaled_text_px(NAME_H, basis, ui_scale.0) / seam,
+            level_height: scaled_text_px(LEVEL_H, basis, ui_scale.0) / seam,
             // A constant ONE LOGICAL PIXEL of drop shadow, in the widget layer's units — the
             // director's 2026-07-07 tuning, which the shared text arm would otherwise scale by
             // this same seam and draw 2 px thick from a 1152-tall window up.
-            shadow_offset: 1.0 / seam,
+            shadow_offset: ui_scale.0 / seam,
         },
         &states,
     );
@@ -1000,6 +1006,11 @@ mod tests {
         let big = plate_basis(Vec2::new(2560.0, 1440.0));
         assert_eq!(text_px(NAME_H, big), 21.0, "midway between 29 and 13");
         assert_eq!(text_px(NAME_H, 10_000.0), 32.0, "atlas-cell cap, raw law");
+        assert_eq!(
+            scaled_text_px(NAME_H, 10_000.0, 0.5),
+            16.0,
+            "the scale applies after the font atlas cap"
+        );
     }
 
     /// **A key press moves the CVar too** — the half a settings page cannot see for itself. V
@@ -1148,5 +1159,6 @@ mod tests {
             "midway between 220 and 128"
         );
         assert_eq!(gx_px(PLATE_W, plate_basis(Vec2::new(800.0, 600.0))), 100.0);
+        assert_eq!(scaled_gx_px(PLATE_W, ref43, 0.5), 64.0);
     }
 }

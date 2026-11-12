@@ -83,7 +83,9 @@ use crate::net::{Embodied, Guid, NetEntity, SelfGuid};
 use crate::ui_chat::{default_color, ChatEventKind};
 use crate::ui_pass::{overlay_z, UiQuad, UiQuadAppend, UiQuads, UvRect};
 use crate::ui_text::{layout_text_quads, measure_text, FontSpec, Justify, TextSeat, UiFontAtlas};
-use crate::vplates::{device_snap, gx_px, plate_basis, text_px, VPlateSet, VPlates};
+use crate::vplates::{
+    device_snap, gx_px, plate_basis, scaled_gx_px, scaled_text_px, VPlateSet, VPlates,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use benilla_assets::AssetSet;
 use benilla_world::view::WorldCamera;
@@ -403,6 +405,8 @@ fn drive_bubbles(
     time: Res<Time>,
     // The device scale, for the seat's pixel snap ([`device_snap`]).
     window: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    // The global interface scale also applies to the WorldFrame-side bubble.
+    ui_scale: Option<Res<crate::ui_script::UiScaleCvar>>,
 ) {
     active.0.clear();
     let now = time.elapsed_secs();
@@ -581,6 +585,7 @@ fn drive_bubbles(
             p.seat,
             p.viewport,
             scale,
+            ui_scale.as_deref().map_or(1.0, |s| s.0),
             trace,
             p.entity,
             p.anchor,
@@ -626,6 +631,7 @@ fn draw_bubble(
     seat: Vec2,
     viewport: Vec2,
     scale: f32,
+    ui_scale: f32,
     trace: bool,
     // The `bub` jitter-decomposition trace's inputs — see the tail of this function.
     entity: Entity,
@@ -636,14 +642,14 @@ fn draw_bubble(
     z: u64,
 ) {
     let basis = plate_basis(viewport);
-    let border = border_px(viewport, basis);
-    let margin = gx_px(MARGIN, basis);
+    let border = border_px(viewport, basis) * ui_scale;
+    let margin = scaled_gx_px(MARGIN, basis, ui_scale);
 
     // The exact window-derived em, laid out AT that em. This used to shape at the nearest baked
     // ladder size and rescale the finished quads by `px/shaped` around the box centre — a bubble's
     // size is derived from the viewport and so lands on nothing round, which meant every bubble on
     // screen was a resampled bitmap. Since decision 1342 the raster follows the request.
-    let px = text_px(TEXT_H, basis);
+    let px = scaled_text_px(TEXT_H, basis, ui_scale);
     if px <= 0.0 {
         return;
     }
@@ -656,7 +662,7 @@ fn draw_bubble(
     };
     // The wrap law (`0x4b1600` tail): single-line width > 0.2 gx → hard-cap (forces wrap);
     // else max(measured, 2·border-unit).
-    let cap = gx_px(WRAP_W, basis);
+    let cap = scaled_gx_px(WRAP_W, basis, ui_scale);
     let floor = 2.0 * border;
     let (line_w, _) = measure_text(&mut e, &b.text, None, spec);
     let box_w = if line_w > cap { cap } else { line_w.max(floor) };

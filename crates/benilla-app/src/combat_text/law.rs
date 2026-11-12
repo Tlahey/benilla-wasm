@@ -295,6 +295,10 @@ pub(super) fn text_px(v: f32, viewport: Vec2) -> f32 {
     round_px(f64::from(v) * f64::from(viewport.x).hypot(f64::from(viewport.y)))
 }
 
+pub(super) fn scaled_text_px(v: f32, viewport: Vec2, ui_scale: f32) -> f32 {
+    text_px(v, viewport) * ui_scale
+}
+
 /// The shadow's offset — the verified static at `0xce8804` (`{0.002, 0.002}`, init `0x6c7c20`):
 /// a **viewport fraction**, resolved per-axis and integer-rounded at draw (module doc; wow-re
 /// `worldtext-shadow-render-law.md`, TU-A — which corrected our first `× diagonal` reading: the
@@ -321,11 +325,16 @@ pub(super) fn shadow_offset_px(viewport: Vec2) -> Vec2 {
 /// size-proportional between-number padding, ported as the same multiplicative factors. `ink_w`
 /// (our laid-out ink) stands in for the ref's advance sum (side bearings + its 0/2/4 raster
 /// pad stay INFERRED there, ≤ ~3 px).
-pub(super) fn claimed_box_px(ink_w: f32, size_value: f32, viewport: Vec2) -> Vec2 {
+pub(super) fn claimed_box_px(
+    ink_w: f32,
+    size_value: f32,
+    viewport: Vec2,
+    ui_scale: f32,
+) -> Vec2 {
     let diag = viewport.length();
     Vec2::new(
-        (ink_w + (SHADOW_OFFSET_FRAC * diag).round()) * diag / viewport.x,
-        size_value * diag * diag / viewport.y,
+        (ink_w + (SHADOW_OFFSET_FRAC * diag).round() * ui_scale) * diag / viewport.x,
+        size_value * ui_scale * diag * diag / viewport.y,
     )
 }
 
@@ -406,12 +415,15 @@ mod tests {
     #[test]
     fn claimed_box_matches_the_measured_block_anchors() {
         let ref43 = Vec2::new(1024.0, 768.0); // diag = 1280, G44 = 0.8, G48 = 0.6
-        let steady = claimed_box_px(10.0, VALUE_NORMAL, ref43);
+        let steady = claimed_box_px(10.0, VALUE_NORMAL, ref43, 1.0);
         assert!((steady.y - 39.1).abs() < 0.05, "steady box {}", steady.y);
         // ink 10 + seed round(2.56)=3 → 13 · 1.25.
         assert!((steady.x - 16.25).abs() < 1e-3, "steady box {}", steady.x);
-        let crit = claimed_box_px(10.0, VALUE_CRIT, ref43);
+        let crit = claimed_box_px(10.0, VALUE_CRIT, ref43, 1.0);
         assert!((crit.y - 58.7).abs() < 0.05, "crit box {}", crit.y);
+        let scaled = claimed_box_px(5.0, VALUE_NORMAL, ref43, 0.5);
+        assert!((scaled.x - steady.x * 0.5).abs() < 1e-3);
+        assert!((scaled.y - steady.y * 0.5).abs() < 1e-3);
     }
 
     #[test]
@@ -430,6 +442,7 @@ mod tests {
         assert_eq!(text_px(VALUE_NORMAL, Vec2::new(1920.0, 1080.0)), 40.0);
         // The size is exactly the scale_value composition the render loop feeds it.
         assert_eq!(text_px(scale_value(0, 0.5), ref43), 23.0);
+        assert_eq!(scaled_text_px(VALUE_NORMAL, ref43, 0.5), 11.5);
     }
 
     /// The shadow offset law (`worldtext-shadow-render-law.md` TU-A): a per-axis viewport

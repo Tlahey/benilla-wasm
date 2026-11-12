@@ -147,6 +147,36 @@ fn the_menu_has_the_era_frame_and_button_ladder() {
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
+/// ShaguTweaks narrows the menu; the ladder must follow its center rather than a fixed left inset.
+#[test]
+fn menu_buttons_stay_centered_when_an_addon_changes_the_frame_width() {
+    let _data = benilla_formats::wow_data_or_skip!();
+    let mut s = harness();
+    s.run(
+        r#"
+        GameMenuFrame:SetWidth(GameMenuFrame:GetWidth() - 10)
+        IsAddOnLoaded = function(name) return name == "MoveAnything" end
+        ShowUIPanel(GameMenuFrame)
+        "#,
+    )
+    .unwrap();
+    s.resolve();
+
+    let center = s
+        .eval::<f64>("local x = GameMenuFrame:GetCenter(); return x")
+        .unwrap();
+    for name in LADDER {
+        if name == "GameMenuButtonEditMode" {
+            continue;
+        }
+        let x = s
+            .eval::<f64>(&format!("local x = {name}:GetCenter(); return x"))
+            .unwrap();
+        assert!((x - center).abs() < 0.001, "{name} is off-center");
+    }
+    assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
+}
+
 /// When MoveAnything is loaded, its entry replaces Edit Mode and the menu contracts to seven rungs.
 #[test]
 fn move_anything_hides_edit_mode_and_compacts_the_menu() {

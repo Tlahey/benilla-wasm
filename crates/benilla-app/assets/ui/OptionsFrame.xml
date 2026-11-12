@@ -350,6 +350,7 @@
         }
         local optionRussian = {
             ["Options"] = "Настройки", ["Game"] = "Игра", ["AddOns"] = "Аддоны",
+            ["Exit Game"] = "Выход из игры",
             ["Edit Mode"] = "Режим редактирования", ["Support"] = "Поддержка",
             ["Reset"] = "Сбросить", ["Cancel"] = "Отмена",
             ["Player"] = "Игрок", ["Target"] = "Цель", ["Party"] = "Группа",
@@ -371,9 +372,11 @@
             ["Friendly Name Plates"] = "Индикаторы здоровья союзников",
             ["Windowed (Fullscreen)"] = "Оконный (на весь экран)", ["Windowed"] = "Оконный",
             ["Medium"] = "Среднее", ["Minimal"] = "Минимальное", ["Full"] = "Полное",
+            ["Hide Gryphon End Caps"] = "Скрыть грифонов на панели команд",
         }
         local optionFrench = {
             ["AddOns"] = "Extensions",
+            ["Exit Game"] = "Quitter le jeu",
             ["Edit Mode"] = "Mode édition", ["Support"] = "Assistance",
             ["Player"] = "Joueur", ["Target"] = "Cible", ["Party"] = "Groupe",
             ["Pet"] = "Familier", ["Minimap"] = "Minicarte", ["Buffs"] = "Améliorations",
@@ -382,6 +385,7 @@
             ["Drag a handle to move a window."] = "Faites glisser une poignée pour déplacer une fenêtre.",
             ["Reset all moved interface frames to their original positions?"] = "Réinitialiser les positions de toutes les fenêtres déplacées ?",
             ["Reset"] = "Réinitialiser", ["Cancel"] = "Annuler",
+            ["Hide Gryphon End Caps"] = "Masquer les aigles décoratifs",
         }
         function OptionsText(label, tip)
             local key = optionLabelKeys[label]
@@ -1199,7 +1203,7 @@
                 "RowBackgroundSound",
             },
             Graphics = {
-                "RowUiScale", "RowFarclip", "RowWorldDetail", "RowBrightness",
+                "RowFarclip", "RowWorldDetail", "RowBrightness",
                 "RowWeatherDensity",
                 "RowDisplayMode", "RowVerticalSync", "RowRenderScale",
             },
@@ -1228,7 +1232,7 @@
             -- "Raid & Party" — so there is no column order to preserve, only a neighbour to pick.
             -- It sits under Status Text because that is the other unit-frame readout on the page.
             Interface = {
-                "RowEnhancedTooltips", "RowStatusText", "RowTargetOfTarget", "RowTargetOfTargetMode",
+                "RowUiScale", "RowEnhancedTooltips", "RowStatusText", "RowTargetOfTarget", "RowTargetOfTargetMode",
                 "RowShowCloak", "RowShowHelm",
                 "RowInstantQuestText", "RowBuffDurations", "RowAutoQuestWatch",
                 "RowProfanityFilter",
@@ -1269,7 +1273,7 @@
                 "RowPartyChatBubbles", "RowSpamFilter",
             },
             -- 1.12's Advanced Options "Action Bars" group, whole (decision 1500 completing 1136).
-            -- Its six rows, the four bar toggles then the grid switch then the lock. That is the
+            -- Its seven rows, the four bar toggles then the grid switch, end caps and lock. That is the
             -- DIRECTOR's order, not the reference's: 1.12's box is two columns and leads with the
             -- lock (CheckButton32 at its TOPLEFT, then 33/40/34 down the left, 35/36 down the
             -- right), which does not survive being flattened into one column — the five switches
@@ -1287,7 +1291,7 @@
             -- wow-re action-bar-toggles.md carry the byte-level evidence.
             ActionBars = {
                 "RowMultiBar1", "RowMultiBar2", "RowMultiBar3", "RowMultiBar4",
-                "RowAlwaysShowMultibars", "RowLockActionBar",
+                "RowAlwaysShowMultibars", "RowHideEndCaps", "RowLockActionBar",
             },
             -- The floating-combat-text family (decision 1134), in the reference's own on-screen
             -- order — its AdvancedOptionsCombatText box's anchor chain, master → scroll mode →
@@ -1561,7 +1565,7 @@
         -- rather than a run: the loop below is `for i, name in` — Lua 5.0's old-style `pairs` —
         -- so it walks the keys that exist and an `ipairs` would have stopped at 3.
         BENILLA_GRAPHICS_SLIDER_ROWS = {
-            "RowUiScale", "RowFarclip", "RowWorldDetail",
+            [2] = "RowFarclip", [3] = "RowWorldDetail",
             [6] = "RowBrightness", [9] = "RowWeatherDensity",
         }
         --
@@ -2502,6 +2506,29 @@
         </Scripts>
     </Frame>
 
+    <Frame name="BenillaActionBarEndCapController" parent="UIParent">
+        <Scripts>
+            <OnLoad>
+                self:RegisterEvent("CVAR_UPDATE")
+                self:RegisterEvent("PLAYER_LOGIN")
+                self:RegisterEvent("PLAYER_ENTERING_WORLD")
+            </OnLoad>
+            <OnEvent>
+                if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" or arg1 == "BENILLA_HIDE_ACTION_BAR_END_CAPS" then
+                    local hide = GetCVar("hideActionBarEndCaps") == "1"
+                    if MainMenuBarLeftEndCap then
+                        if hide then MainMenuBarLeftEndCap:Hide()
+                        else MainMenuBarLeftEndCap:Show() end
+                    end
+                    if MainMenuBarRightEndCap then
+                        if hide then MainMenuBarRightEndCap:Hide()
+                        else MainMenuBarRightEndCap:Show() end
+                    end
+                end
+            </OnEvent>
+        </Scripts>
+    </Frame>
+
     <!-- `toplevel` restored (ref OptionsFrame.xml l.3) — same class as the B180/Bagnon dialog
          (decision 1318). NOTE our strata is HIGH where the ref is DIALOG; left as-is, flagged in
          the record rather than silently changed. -->
@@ -3345,11 +3372,8 @@
                                 </Frame>
                                 <!-- The Graphics page (0959): the 1.12 OptionsFrameSliders rows
                                      that have a benilla knob behind them, in the table's own order
-                                     (OptionsFrame.lua l.25-27). UI Scale: uiscale 0.64..1.0 step
-                                     0.01 (UI_SCALE "UI Scale", percent readout — era's own
-                                     FormatPercentageRounded on its uiscale row); 1.12's useUiScale
-                                     gate has no benilla knob (our scale always applies; off ≡ 1.0)
-                                     so the checkbox doesn't ship. Terrain Distance: farclip
+                                     (OptionsFrame.lua l.25-27). UI Scale lives on Interface.
+                                     Terrain Distance: farclip
                                      177..777 step 60 = (max-min)/10 (FARCLIP "Terrain Distance",
                                      raw-yards readout — era's law when a slider has no formatter);
                                      retired by the director in 0961 and back by their call in
@@ -3366,28 +3390,10 @@
                                         <Anchor point="BOTTOMRIGHT"/>
                                     </Anchors>
                                     <Frames>
-                                        <Frame name="$parentRowUiScale" inherits="OptionsSliderRowTemplate">
+                                        <Frame name="$parentRowFarclip" inherits="OptionsSliderRowTemplate">
                                             <Anchors>
                                                 <Anchor point="TOPLEFT"><Offset><AbsDimension x="10" y="-12"/></Offset></Anchor>
                                                 <Anchor point="TOPRIGHT"><Offset><AbsDimension x="-20" y="-12"/></Offset></Anchor>
-                                            </Anchors>
-                                            <Scripts><OnLoad>
-                                                OptionsRow_OnLoad(self, "uiScale", "UI Scale",
-                                                    "OPTION_TOOLTIP_UI_SCALE")
-                                                OptionsSliderRow_Setup(self, OptionsFrameSliders[1].minValue,
-                                                    OptionsFrameSliders[1].maxValue,
-                                                    OptionsFrameSliders[1].valueStep)
-                                                -- era registers its uiscale row CommitFlag.Apply
-                                                -- (Graphics.lua l.684): the one row whose live
-                                                -- write would rescale the very slider mid-drag —
-                                                -- it stages and commits through the Apply button.
-                                                self.deferred = 1
-                                            </OnLoad></Scripts>
-                                        </Frame>
-                                        <Frame name="$parentRowFarclip" inherits="OptionsSliderRowTemplate">
-                                            <Anchors>
-                                                <Anchor point="TOPLEFT" relativeTo="$parentRowUiScale" relativePoint="BOTTOMLEFT"><Offset><AbsDimension x="0" y="-9"/></Offset></Anchor>
-                                                <Anchor point="TOPRIGHT" relativeTo="$parentRowUiScale" relativePoint="BOTTOMRIGHT"><Offset><AbsDimension x="0" y="-9"/></Offset></Anchor>
                                             </Anchors>
                                             <Scripts><OnLoad>
                                                 OptionsRow_OnLoad(self, "farclip", "Terrain Distance",
@@ -4024,10 +4030,20 @@
                                                 self.applyFunc = "MultiActionBar_UpdateGridVisibility"
                                             </OnLoad></Scripts>
                                         </Frame>
-                                        <Frame name="$parentRowLockActionBar" inherits="OptionsCheckboxRowTemplate">
+                                        <Frame name="$parentRowHideEndCaps" inherits="OptionsCheckboxRowTemplate">
                                             <Anchors>
                                                 <Anchor point="TOPLEFT" relativeTo="$parentRowAlwaysShowMultibars" relativePoint="BOTTOMLEFT"><Offset><AbsDimension x="0" y="-9"/></Offset></Anchor>
                                                 <Anchor point="TOPRIGHT" relativeTo="$parentRowAlwaysShowMultibars" relativePoint="BOTTOMRIGHT"><Offset><AbsDimension x="0" y="-9"/></Offset></Anchor>
+                                            </Anchors>
+                                            <Scripts><OnLoad>
+                                                OptionsRow_OnLoad(self, "hideActionBarEndCaps", "Hide Gryphon End Caps")
+                                                self.cvarEvent = "BENILLA_HIDE_ACTION_BAR_END_CAPS"
+                                            </OnLoad></Scripts>
+                                        </Frame>
+                                        <Frame name="$parentRowLockActionBar" inherits="OptionsCheckboxRowTemplate">
+                                            <Anchors>
+                                                <Anchor point="TOPLEFT" relativeTo="$parentRowHideEndCaps" relativePoint="BOTTOMLEFT"><Offset><AbsDimension x="0" y="-9"/></Offset></Anchor>
+                                                <Anchor point="TOPRIGHT" relativeTo="$parentRowHideEndCaps" relativePoint="BOTTOMRIGHT"><Offset><AbsDimension x="0" y="-9"/></Offset></Anchor>
                                             </Anchors>
                                             <Scripts><OnLoad>
                                                 OptionsGlobalRow_OnLoad(self, "LOCK_ACTIONBAR",
@@ -4064,6 +4080,28 @@
                                         <Anchor point="BOTTOMRIGHT"/>
                                     </Anchors>
                                     <Frames>
+                                        <Frame name="$parentRowUiScale" inherits="OptionsSliderRowTemplate">
+                                            <Anchors>
+                                                <Anchor point="TOPLEFT"><Offset><AbsDimension x="10" y="-12"/></Offset></Anchor>
+                                                <Anchor point="TOPRIGHT"><Offset><AbsDimension x="-20" y="-12"/></Offset></Anchor>
+                                            </Anchors>
+                                            <Scripts>
+                                                <OnLoad>
+                                                    OptionsRow_OnLoad(self, "uiScale", "UI Scale",
+                                                        "OPTION_TOOLTIP_UI_SCALE")
+                                                    local info = OptionsFrameSliders[1]
+                                                    OptionsSliderRow_Setup(self, info.minValue, info.maxValue,
+                                                        info.valueStep)
+                                                    -- Apply once, rather than rescaling the slider mid-drag.
+                                                    self.deferred = 1
+                                                </OnLoad>
+                                                <OnShow>
+                                                    local info = OptionsFrameSliders[1]
+                                                    OptionsSliderRow_Setup(this, info.minValue, info.maxValue,
+                                                        info.valueStep)
+                                                </OnShow>
+                                            </Scripts>
+                                        </Frame>
                                         <!-- Status Bar Text (decision 1140). First because it is
                                              first in the reference's file: its own Display column
                                              runs CheckButton12 -> **2** -> 21, and 2 is declared
@@ -4079,8 +4117,8 @@
                                              usual "no reader" reason to be absent; it was simply never seated. -->
                                         <Frame name="$parentRowEnhancedTooltips" inherits="OptionsCheckboxRowTemplate">
                                             <Anchors>
-                                                <Anchor point="TOPLEFT"><Offset><AbsDimension x="10" y="-12"/></Offset></Anchor>
-                                                <Anchor point="TOPRIGHT"><Offset><AbsDimension x="-20" y="-12"/></Offset></Anchor>
+                                                <Anchor point="TOPLEFT" relativeTo="$parentRowUiScale" relativePoint="BOTTOMLEFT"><Offset><AbsDimension x="0" y="-9"/></Offset></Anchor>
+                                                <Anchor point="TOPRIGHT" relativeTo="$parentRowUiScale" relativePoint="BOTTOMRIGHT"><Offset><AbsDimension x="0" y="-9"/></Offset></Anchor>
                                             </Anchors>
                                             <Scripts><OnLoad>OptionsRow_OnLoad(self, "UberTooltips", "Enhanced Tooltips",
                                                 "OPTION_TOOLTIP_USE_UBERTOOLTIPS")</OnLoad></Scripts>

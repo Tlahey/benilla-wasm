@@ -171,12 +171,6 @@ fn drain_logout(
         return;
     };
     for request in script.take_session_requests() {
-        #[cfg(target_arch = "wasm32")]
-        let request = match request {
-            SessionRequest::Quit => SessionRequest::Logout,
-            SessionRequest::ForceQuit => SessionRequest::ForceLogout,
-            other => other,
-        };
         match request {
             SessionRequest::Logout | SessionRequest::Quit => {
                 // `0x5ab000`'s pending-logout bail, and it is **silent** — no error line, no
@@ -192,7 +186,7 @@ fn drain_logout(
                 if self_guid.0.is_none() || commands.0.send(ClientCommand::Logout).is_err() {
                     if logout.quitting {
                         info!("logout: quit with no world session — exiting");
-                        exit.write(AppExit::Success);
+                        quit_game(&mut exit);
                     } else {
                         warn!("logout: no world session — logout dropped");
                         logout.quitting = false;
@@ -218,7 +212,7 @@ fn drain_logout(
             }
             SessionRequest::ForceQuit => {
                 info!("logout: force quit");
-                exit.write(AppExit::Success);
+                quit_game(&mut exit);
             }
             // `CMSG_PLAYER_LOGOUT`, the forced flavour: the dispatcher's own gate is a live
             // in-world session, and nothing happens without one (decision 1963).
@@ -248,6 +242,16 @@ fn drain_logout(
     }
 }
 
+fn quit_game(exit: &mut MessageWriter<AppExit>) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = exit;
+        crate::web_config::return_to_login();
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    exit.write(AppExit::Success);
+}
+
 /// The completion edge: `SMSG_LOGOUT_COMPLETE` normally lands us at character select (decision
 /// 0193), but a logout that began as Exit Game ends the process instead.
 fn exit_on_logout_complete(
@@ -264,7 +268,7 @@ fn exit_on_logout_complete(
     if logout.quitting {
         logout.quitting = false;
         info!("logout: world session ended — exiting");
-        exit.write(AppExit::Success);
+        quit_game(&mut exit);
     }
 }
 
@@ -273,7 +277,9 @@ pub struct UiLogoutPlugin;
 #[cfg(target_arch = "wasm32")]
 fn hide_browser_exit(script: Option<NonSendMut<UiScript>>) {
     if let Some(mut script) = script {
-        if let Err(error) = script.run("if AccountLoginExitButton then AccountLoginExitButton:Hide() end; if GameMenuButtonQuit then GameMenuButtonQuit:Hide() end") {
+        if let Err(error) =
+            script.run("if AccountLoginExitButton then AccountLoginExitButton:Hide() end")
+        {
             bevy::log::debug!("browser exit controls: {error}");
         }
     }
@@ -439,5 +445,60 @@ mod tests {
         s.apply_cancelled();
         assert_eq!(s.signals, vec![LogoutSignal::Cancelled]);
         assert!(!s.quitting);
+    }
+
+    #[test]
+    fn quit_keeps_its_intent_until_completion_and_force_quit_exits_without_a_packet() {
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let mut app = App::new();
+        app.init_resource::<LogoutState>()
+            .init_resource::<crate::ui_script::ReloadUiPending>()
+            .add_message::<AppExit>()
+            .add_message::<LoggedOutMessage>()
+            .insert_resource(SelfGuid(Some(9)))
+            .insert_resource(NetCommands(tx))
+            .insert_non_send_resource(UiScript::new().unwrap());
+
+        app.world_mut()
+            .non_send_resource_mut::<UiScript>()
+            .queue_session_request(SessionRequest::Quit);
+        app.world_mut().run_system_once(drain_logout).unwrap();
+        assert!(matches!(rx.try_recv(), Ok(ClientCommand::Logout)));
+        assert!(app.world().resource::<LogoutState>().quitting);
+
+        app.world_mut()
+            .resource_mut::<LogoutState>()
+            .apply_response(0, false);
+        assert_eq!(
+            app.world().resource::<LogoutState>().signals,
+            vec![LogoutSignal::Quiting]
+        );
+        app.world_mut().write_message(LoggedOutMessage);
+        app.world_mut()
+            .run_system_once(exit_on_logout_complete)
+            .unwrap();
+        assert_eq!(
+            app.world_mut()
+                .resource_mut::<Messages<AppExit>>()
+                .drain()
+                .count(),
+            1
+        );
+
+        app.world_mut()
+            .non_send_resource_mut::<UiScript>()
+            .queue_session_request(SessionRequest::ForceQuit);
+        app.world_mut().run_system_once(drain_logout).unwrap();
+        assert!(
+            rx.try_recv().is_err(),
+            "force quit closes the client immediately"
+        );
+        assert_eq!(
+            app.world_mut()
+                .resource_mut::<Messages<AppExit>>()
+                .drain()
+                .count(),
+            1
+        );
     }
 }

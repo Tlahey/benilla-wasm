@@ -25,6 +25,19 @@ mod text;
 /// `WOW_UI_COST=1` — the untraced per-frame cost meter for this system's phases (the premise
 pub(crate) use crate::ui_cost::ui_cost_enabled;
 
+#[cfg(target_arch = "wasm32")]
+fn lua_tick_instruction_budget() -> u64 {
+    static BUDGET: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *BUDGET.get_or_init(|| {
+        if crate::web_config::lua_diagnostics_enabled() {
+            warn!("[lua-diagnostic] debugLua=1: limiting each UI tick to 5000000 Lua instructions");
+            5_000_000
+        } else {
+            0
+        }
+    })
+}
+
 /// `WOW_UI_GATE=1` — the extract gate's miss reporter ([`report_gate_miss`]). Off by default and
 /// read once, the `[ui-cost]` meter's posture.
 fn gate_log_enabled() -> bool {
@@ -665,7 +678,15 @@ pub(super) fn tick_script(
             let _ = script
                 .run("if UIParent_ManageFramePositions then UIParent_ManageFramePositions() end");
         }
-        script.tick(time.delta_secs());
+        #[cfg(target_arch = "wasm32")]
+        let instruction_budget = lua_tick_instruction_budget();
+        #[cfg(not(target_arch = "wasm32"))]
+        let instruction_budget = 0;
+        if instruction_budget > 0 {
+            script.tick_with_instruction_budget(time.delta_secs(), instruction_budget);
+        } else {
+            script.tick(time.delta_secs());
+        }
     }
     // The frame's clock pair ([`super::UiClock`]): the VM value the tick just produced, anchored
     // at the exact `Instant` whose frame-to-frame deltas that clock accumulates — `Time<Real>`'s

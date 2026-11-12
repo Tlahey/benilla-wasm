@@ -343,6 +343,7 @@ pub(crate) const REGISTERED: &[Registered] = &[
          The reference useUiScale-OFF law computes clamp(768/height, 0.9, 1.0) instead. \
          Keep this row aligned with ui_scale::DEFAULT_UI_SCALE",
     ),
+    same("hideActionBarEndCaps", "0"),
     // **`useUiScale` (`0x8430c0`, default `"0"`)** — the switch the row above gates on.
     //
     // Its absence used to be argued for here as *"nothing reads it, and registering it would only
@@ -1668,13 +1669,9 @@ impl Plugin for CvarPlugin {
             // window's Okay is the case: `SetCVar` per changed row, then `RestartGx()`, in one
             // handler; `video::drain_restart_gx` orders after this so the commit finds the stage.
             .add_systems(Update, sync_cvars.after(crate::ui_script::UiInput));
-        // **The flush is on the exit edge, not beside its feed** (decision 1528). It used to be
-        // `(sync_cvars, save_config).chain()` in `Update`, which made the "or the app exiting"
-        // half of its own gate dead on the exit a player actually causes: the close button's
-        // `AppExit` is not written until `PostUpdate`, so the last second of slider drags went
-        // with the process. `Last` still runs after `sync_cvars` — schedule order does what the
-        // `.chain()` did — and now also after every announcement.
-        crate::shutdown::on_app_exit(app, save_config.into_configs());
+        // Run after both the VM sync and PostUpdate's exit announcement. The saver owns its
+        // debounce; an exit-only gate would prevent browser sessions from ever saving.
+        app.add_systems(Last, save_config);
     }
 }
 
@@ -2030,16 +2027,15 @@ const HEADER: &str = "\
 # Managed by the client; hand edits are read on next launch and preserved on save.
 ";
 
-/// Dirty + one quiet second (or the app exiting) → rewrite `config.toml` atomically, from the
-/// registry — the store, not the VM's mirror, so a session with no VM at all (the glue screens,
-/// a headless run) saves exactly what it changed.
+/// Save dirty browser settings each frame: a page reload does not announce `AppExit`.
+/// Native writes retain the one-quiet-second debounce and immediate exit flush.
 fn save_config(mut cvars: ResMut<Cvars>, mut exits: MessageReader<AppExit>) {
     let exiting = exits.read().next().is_some();
     if !cvars.dirty {
         return;
     }
     let quiet = cvars.last_change.is_none_or(|t| t.elapsed() >= SAVE_QUIET);
-    if !(quiet || exiting) {
+    if !(cfg!(target_arch = "wasm32") || quiet || exiting) {
         return;
     }
     let Some(path) = crate::local_state::config_path() else {
@@ -2827,6 +2823,43 @@ mod tests {
         let back: LocalConfig = toml::from_str(&text).unwrap();
         assert_eq!(back.cvars.len(), 1, "a diff, not a dump: {text}");
         std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn interface_settings_are_saved_without_exiting_and_restored_on_launch() {
+        use crate::local_state::test_env::{EnvGuard, ENV_LOCK};
+        let _l = ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let tmp =
+            std::env::temp_dir().join(format!("benilla-cvar-autosave-{}", std::process::id()));
+        let _c = EnvGuard::unset("WOW_CAPTURE");
+        let _u = EnvGuard::unset("WOW_UI_SCALE");
+        let _h = EnvGuard::set("BENILLA_HOME", tmp.to_str().unwrap());
+        let mut app = cvar_app();
+        app.update();
+        app.world_mut()
+            .non_send_resource_mut::<UiScript>()
+            .run("SetCVar('uiScale', '0.8'); SetCVar('hideActionBarEndCaps', '1')")
+            .unwrap();
+        app.update();
+        app.world_mut().resource_mut::<Cvars>().last_change = Some(Instant::now() - SAVE_QUIET);
+        app.update();
+
+        let saved: LocalConfig =
+            toml::from_str(&std::fs::read_to_string(tmp.join("config.toml")).unwrap()).unwrap();
+        assert_eq!(saved.cvars.get("uiScale").map(String::as_str), Some("0.8"));
+        assert_eq!(
+            saved.cvars.get("hideActionBarEndCaps").map(String::as_str),
+            Some("1")
+        );
+        let mut fresh = cvar_app();
+        fresh.update();
+        let mut script = fresh.world_mut().non_send_resource_mut::<UiScript>();
+        assert_eq!(script.cvar("uiScale").as_deref(), Some("0.8"));
+        assert_eq!(script.cvar("hideActionBarEndCaps").as_deref(), Some("1"));
+        std::fs::remove_file(tmp.join("config.toml")).unwrap();
+        std::fs::remove_dir(tmp).unwrap();
     }
 
     /// A client whose CVar host is real: every knob resource an observer writes, every

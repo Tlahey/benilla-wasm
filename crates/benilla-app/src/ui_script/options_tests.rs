@@ -442,7 +442,7 @@ fn search_reflows_live_rows_and_restores_the_page() {
         ("BenillaOptionsFrameContainerBodyAudioRowSound", false),
         ("BenillaOptionsFrameContainerBodyAudioRowEnableAll", false),
         ("BenillaOptionsFrameContainerBodyControlsRowAutoLoot", false),
-        ("BenillaOptionsFrameContainerBodyGraphicsRowUiScale", false),
+        ("BenillaOptionsFrameContainerBodyInterfaceRowUiScale", false),
         ("BenillaOptionsFrameContainerBodyNoResults", false),
     ] {
         assert_eq!(
@@ -672,7 +672,8 @@ fn a_slider_rows_readout_sits_on_its_labels_line() {
             "Audio",
             &["RowMaster", "RowSound", "RowMusic", "RowAmbience"][..],
         ),
-        ("Graphics", &["RowUiScale", "RowFarclip"][..]),
+        ("Graphics", &["RowFarclip"][..]),
+        ("Interface", &["RowUiScale"][..]),
     ] {
         s.run(&format!("BenillaOptionsFrameCategoryListRow{page}:Click()"))
             .unwrap();
@@ -718,7 +719,7 @@ fn audio_harness() -> UiScript {
 fn combat_harness() -> UiScript {
     let mut s = audio_harness();
     s.set_screen_size(1024.0, 768.0);
-    load_definers(&s, &[r"Interface\FrameXML\UIParent.xml"]);
+    load_definers(&mut s, &[r"Interface\FrameXML\UIParent.xml"]);
     // The family's definers are the options window's own since 1964 (the reference's
     // UIOptionsFrame.lua block); the addon itself is LoadOnDemand off the chain, seated so the
     // master row's apply can load it the way the client does.
@@ -730,7 +731,7 @@ fn combat_harness() -> UiScript {
 /// `combat_harness`). Every page over the second store needs this: a row captures its default from
 /// the global's own file-scope assignment at OnLoad, so that file has to have run first — which is
 /// exactly the ordering the real manifest guarantees.
-fn load_definers(s: &UiScript, files: &[&str]) {
+fn load_definers(s: &mut UiScript, files: &[&str]) {
     for file in files {
         super::test_ui::load_ui(s, file);
         // Remembered so `harness_on` loads each file once (see there).
@@ -756,7 +757,7 @@ fn interface_harness() -> UiScript {
     let mut s = audio_harness();
     s.set_screen_size(1024.0, 768.0);
     load_definers(
-        &s,
+        &mut s,
         &[
             "Interface\\FrameXML\\Fonts.xml",
             r"Interface\FrameXML\MoneyFrame.lua",
@@ -836,7 +837,7 @@ fn chat_harness() -> UiScript {
     let mut s = audio_harness();
     s.set_screen_size(1024.0, 768.0);
     load_definers(
-        &s,
+        &mut s,
         &[
             "Interface\\FrameXML\\Fonts.xml",
             r"Interface\FrameXML\MoneyFrame.lua",
@@ -871,7 +872,7 @@ fn actionbars_harness() -> UiScript {
     let mut s = audio_harness();
     s.set_screen_size(1024.0, 768.0);
     load_definers(
-        &s,
+        &mut s,
         &[
             "Interface\\FrameXML\\Fonts.xml",
             r"Interface\FrameXML\UIParent.xml",
@@ -1139,12 +1140,9 @@ fn defaults_resets_the_audio_page_to_registered_defaults() {
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
-/// Selecting Graphics shows ITS page body (0959) with both 1.12 sliders reading the table:
-/// uiScale on the 0.64..1.0 panel range with the percent readout, farclip (Terrain Distance —
-/// retired 0961, back 1513) on 177..777 with the raw-yards readout. The swap works both ways —
-/// Audio's body takes over when clicked.
+/// UI scale belongs to Interface; terrain distance stays on Graphics.
 #[test]
-fn the_graphics_page_reads_the_cvar_table_on_select() {
+fn interface_and_graphics_read_their_own_sliders_on_select() {
     let mut s = audio_harness();
     s.set_cvar_host("uiScale", "0.8");
     s.set_cvar_host("farclip", "297");
@@ -1160,17 +1158,27 @@ fn the_graphics_page_reads_the_cvar_table_on_select() {
         .eval::<bool>("return BenillaOptionsFrameContainerDefaults:IsEnabled() ~= 0")
         .unwrap());
     assert!(s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodyGraphicsRowUiScale == nil")
+        .unwrap());
+    s.run("BenillaOptionsFrameCategoryListRowInterface:Click()")
+        .unwrap();
+    assert!(s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodyInterfaceRowUiScale:IsVisible()")
+        .unwrap());
+    assert!(s
         .eval::<bool>(
-            "return math.abs(BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlSlider:GetValue() - 0.8) < 0.0001"
+            "return math.abs(BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlSlider:GetValue() - 0.8) < 0.0001"
         )
         .unwrap());
     assert_eq!(
         s.eval::<String>(
-            "return BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlValue:GetText()"
+            "return BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlValue:GetText()"
         )
         .unwrap(),
         "80%"
     );
+    s.run("BenillaOptionsFrameCategoryListRowGraphics:Click()")
+        .unwrap();
     assert!(s
         .eval::<bool>(
             "return math.abs(BenillaOptionsFrameContainerBodyGraphicsRowFarclipControlSlider:GetValue() - 297) < 0.001"
@@ -1186,17 +1194,17 @@ fn the_graphics_page_reads_the_cvar_table_on_select() {
     // The labels are the 1.12 GlobalStrings' own.
     assert_eq!(
         s.eval::<String>(
-            "return BenillaOptionsFrameContainerBodyGraphicsRowUiScaleLabel:GetText()"
+            "return BenillaOptionsFrameContainerBodyInterfaceRowUiScaleLabel:GetText()"
         )
         .unwrap(),
-        "UI Scale"
+        s.eval::<String>("return UI_SCALE").unwrap()
     );
     assert_eq!(
         s.eval::<String>(
             "return BenillaOptionsFrameContainerBodyGraphicsRowFarclipLabel:GetText()"
         )
         .unwrap(),
-        "Terrain Distance"
+        s.eval::<String>("return FARCLIP").unwrap()
     );
 
     // The swap, the other way: Audio in, Graphics out.
@@ -1207,6 +1215,28 @@ fn the_graphics_page_reads_the_cvar_table_on_select() {
         .unwrap());
     assert!(s
         .eval::<bool>("return BenillaOptionsFrameContainerBodyAudio:IsVisible()")
+        .unwrap());
+    assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
+}
+
+#[test]
+fn searching_for_ui_scale_uses_the_interface_category() {
+    let mut s = harness_on(audio_harness());
+    s.run("ShowUIPanel(BenillaOptionsFrame)").unwrap();
+    s.run(
+        "BenillaOptionsFrameSearchBox:SetText(\
+         BenillaOptionsFrameContainerBodyInterfaceRowUiScaleLabel:GetText())",
+    )
+    .unwrap();
+    s.tick(0.0);
+    assert!(s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodyInterfaceRowUiScale:IsVisible()")
+        .unwrap());
+    assert!(s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodySearchHeadInterface:IsVisible()")
+        .unwrap());
+    assert!(!s
+        .eval::<bool>("return BenillaOptionsFrameContainerBodySearchHeadGraphics:IsVisible()")
         .unwrap());
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
@@ -1666,7 +1696,7 @@ fn the_nameplates_page_toggles_the_unit_name_cvars() {
 fn the_ui_scale_slider_defers_to_the_apply_button() {
     let mut s = harness_on(audio_harness());
     s.run("ShowUIPanel(BenillaOptionsFrame)").unwrap();
-    s.run("BenillaOptionsFrameCategoryListRowGraphics:Click()")
+    s.run("BenillaOptionsFrameCategoryListRowInterface:Click()")
         .unwrap();
     assert!(
         s.take_cvar_changes().is_empty(),
@@ -1680,11 +1710,11 @@ fn the_ui_scale_slider_defers_to_the_apply_button() {
 
     // Off-grid 0.787 snaps to 0.79 and the readout follows — but NOTHING queues; the Apply
     // button exists now (era shows and enables it together).
-    s.run("BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlSlider:SetValue(0.787)")
+    s.run("BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlSlider:SetValue(0.787)")
         .unwrap();
     assert_eq!(
         s.eval::<String>(
-            "return BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlValue:GetText()"
+            "return BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlValue:GetText()"
         )
         .unwrap(),
         "79%"
@@ -1702,7 +1732,7 @@ fn the_ui_scale_slider_defers_to_the_apply_button() {
 
     // A second move re-stages the pending value — still nothing queues (0989: the steppers
     // are gone; a drag's SetValue is the remaining move).
-    s.run("BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlSlider:SetValue(0.8)")
+    s.run("BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlSlider:SetValue(0.8)")
         .unwrap();
     assert!(s.take_cvar_changes().is_empty());
 
@@ -1717,12 +1747,12 @@ fn the_ui_scale_slider_defers_to_the_apply_button() {
         .unwrap());
 
     // A move away arms Apply; dragging back onto the committed value disarms it.
-    s.run("BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlSlider:SetValue(0.79)")
+    s.run("BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlSlider:SetValue(0.79)")
         .unwrap();
     assert!(s
         .eval::<bool>("return BenillaOptionsFrameApplyButton:IsVisible()")
         .unwrap());
-    s.run("BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlSlider:SetValue(0.8)")
+    s.run("BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlSlider:SetValue(0.8)")
         .unwrap();
     assert!(!s
         .eval::<bool>("return BenillaOptionsFrameApplyButton:IsVisible()")
@@ -1826,9 +1856,9 @@ fn the_render_scale_row_shows_a_percentage_and_defers_to_apply() {
 fn a_pending_ui_scale_survives_the_page_switch_and_dies_on_hide() {
     let mut s = harness_on(audio_harness());
     s.run("ShowUIPanel(BenillaOptionsFrame)").unwrap();
-    s.run("BenillaOptionsFrameCategoryListRowGraphics:Click()")
+    s.run("BenillaOptionsFrameCategoryListRowInterface:Click()")
         .unwrap();
-    s.run("BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlSlider:SetValue(0.7)")
+    s.run("BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlSlider:SetValue(0.7)")
         .unwrap();
     let _ = s.take_cvar_changes();
 
@@ -1839,11 +1869,11 @@ fn a_pending_ui_scale_survives_the_page_switch_and_dies_on_hide() {
         .eval::<bool>("return BenillaOptionsFrameApplyButton:IsVisible()")
         .unwrap());
     // …and back: the slider shows the PENDING value, not the committed one.
-    s.run("BenillaOptionsFrameCategoryListRowGraphics:Click()")
+    s.run("BenillaOptionsFrameCategoryListRowInterface:Click()")
         .unwrap();
     assert_eq!(
         s.eval::<String>(
-            "return BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlValue:GetText()"
+            "return BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlValue:GetText()"
         )
         .unwrap(),
         "70%"
@@ -1852,14 +1882,14 @@ fn a_pending_ui_scale_survives_the_page_switch_and_dies_on_hide() {
     // Hide discards (the era confirm dialog is cut): the reopened window reads the truth.
     s.run("HideUIPanel(BenillaOptionsFrame)").unwrap();
     s.run("ShowUIPanel(BenillaOptionsFrame)").unwrap();
-    s.run("BenillaOptionsFrameCategoryListRowGraphics:Click()")
+    s.run("BenillaOptionsFrameCategoryListRowInterface:Click()")
         .unwrap();
     assert_eq!(
         s.eval::<String>(
-            "return BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlValue:GetText()"
+            "return BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlValue:GetText()"
         )
         .unwrap(),
-        "90%"
+        "100%"
     );
     assert!(!s
         .eval::<bool>("return BenillaOptionsFrameApplyButton:IsVisible()")
@@ -1912,37 +1942,40 @@ fn the_terrain_distance_slider_snaps_to_the_1_12_grid_and_writes_live() {
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
-/// Defaults on the Graphics page: uiScale back to its registered default (1.0) and farclip to
-/// its (350), the rows following, ONLY the moved values queuing — and a pending uiScale edit
-/// dies with it (the default write supersedes what Apply would have committed).
+/// Defaults affect only their page, including discarding its pending edits.
 #[test]
 fn defaults_resets_the_graphics_page_to_registered_defaults() {
-    let mut s = audio_harness();
+    let mut s = interface_harness();
     s.set_cvar_host("uiScale", "0.8");
     s.set_cvar_host("farclip", "297");
-    let mut s = harness_on(s);
     s.run("ShowUIPanel(BenillaOptionsFrame)").unwrap();
-    s.run("BenillaOptionsFrameCategoryListRowGraphics:Click()")
+    s.run("BenillaOptionsFrameCategoryListRowInterface:Click()")
         .unwrap();
     // Stage a pending edit too — Defaults must kill it, not commit it.
-    s.run("BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlSlider:SetValue(0.7)")
+    s.run("BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlSlider:SetValue(0.7)")
         .unwrap();
     let _ = s.take_cvar_changes();
 
     s.run("BenillaOptionsFrameContainerDefaults:Click()")
         .unwrap();
     let changes = s.take_cvar_changes();
-    assert!(
-        changes.contains(&("uiScale".to_string(), "1.0".to_string())),
-        "{changes:?}"
+    assert_eq!(changes, vec![("uiScale".to_string(), "1.0".to_string())]);
+    assert_eq!(
+        s.eval::<String>("return GetCVar('farclip')").unwrap(),
+        "297"
     );
+    s.run("BenillaOptionsFrameCategoryListRowGraphics:Click()")
+        .unwrap();
+    s.run("BenillaOptionsFrameContainerDefaults:Click()")
+        .unwrap();
+    let changes = s.take_cvar_changes();
     assert!(
         changes.contains(&("farclip".to_string(), "350".to_string())),
         "{changes:?}"
     );
     assert_eq!(
         changes.len(),
-        2,
+        1,
         "only the default writes queue — never the dead pending: {changes:?}"
     );
     // **357, not 350, and that is the reference's ladder rather than a rounding slip.** The row
@@ -1961,10 +1994,10 @@ fn defaults_resets_the_graphics_page_to_registered_defaults() {
     );
     assert_eq!(
         s.eval::<String>(
-            "return BenillaOptionsFrameContainerBodyGraphicsRowUiScaleControlValue:GetText()"
+            "return BenillaOptionsFrameContainerBodyInterfaceRowUiScaleControlValue:GetText()"
         )
         .unwrap(),
-        "90%"
+        "100%"
     );
     assert!(!s
         .eval::<bool>("return BenillaOptionsFrameApplyButton:IsVisible()")
@@ -3094,6 +3127,73 @@ fn the_action_bars_page_locks_the_real_bar() {
     s.run("this = ActionButton1 ActionButton1:GetScript(\"OnDragStart\")()")
         .unwrap();
     assert!(s.cursor_payload().is_some(), "unlocked again");
+    assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
+}
+
+#[test]
+fn the_action_bars_page_hides_and_restores_both_gryphon_end_caps() {
+    let mut s = actionbars_harness();
+    s.fire_event("PLAYER_ENTERING_WORLD", vec![]);
+    let shown =
+        |s: &mut UiScript, name: &str| s.eval::<bool>(&format!("return {name}:IsShown()")).unwrap();
+    let end_cap_quads = |s: &mut UiScript| {
+        s.resolve();
+        s.extract()
+            .iter()
+            .filter(|q| {
+                matches!(&q.content, QuadContent::Texture { path: Some(p), .. }
+                    if p.ends_with("UI-MainMenuBar-EndCap-Dwarf"))
+            })
+            .count()
+    };
+    assert!(shown(&mut s, "MainMenuBarLeftEndCap"));
+    assert!(shown(&mut s, "MainMenuBarRightEndCap"));
+    assert_eq!(end_cap_quads(&mut s), 2);
+
+    s.run("ShowUIPanel(BenillaOptionsFrame)").unwrap();
+    s.run("BenillaOptionsFrameCategoryListRowActionBars:Click()")
+        .unwrap();
+    let checkbox = "BenillaOptionsFrameContainerBodyActionBarsRowHideEndCapsCheck";
+    assert!(!s
+        .eval::<bool>(&format!("return {checkbox}:GetChecked()"))
+        .unwrap());
+    s.run(&format!("{checkbox}:Click()")).unwrap();
+    s.tick(0.0);
+    assert_eq!(
+        s.eval::<String>("return GetCVar('hideActionBarEndCaps')")
+            .unwrap(),
+        "1"
+    );
+    assert!(!shown(&mut s, "MainMenuBarLeftEndCap"));
+    assert!(!shown(&mut s, "MainMenuBarRightEndCap"));
+    assert_eq!(end_cap_quads(&mut s), 0);
+
+    s.run(&format!("{checkbox}:Click()")).unwrap();
+    s.tick(0.0);
+    assert!(shown(&mut s, "MainMenuBarLeftEndCap"));
+    assert!(shown(&mut s, "MainMenuBarRightEndCap"));
+    assert_eq!(end_cap_quads(&mut s), 2);
+
+    // A restored preference is applied even without opening the options.
+    s.set_cvar_host("hideActionBarEndCaps", "1");
+    s.fire_event("PLAYER_LOGIN", vec![]);
+    assert_eq!(end_cap_quads(&mut s), 0);
+    s.set_cvar_host("hideActionBarEndCaps", "0");
+    s.fire_event("PLAYER_ENTERING_WORLD", vec![]);
+    assert_eq!(end_cap_quads(&mut s), 2);
+
+    s.run(&format!("{checkbox}:Click()")).unwrap();
+    s.tick(0.0);
+    s.run("BenillaOptionsFrameContainerDefaults:Click()")
+        .unwrap();
+    s.tick(0.0);
+    assert_eq!(
+        s.eval::<String>("return GetCVar('hideActionBarEndCaps')")
+            .unwrap(),
+        "0"
+    );
+    assert!(shown(&mut s, "MainMenuBarLeftEndCap"));
+    assert!(shown(&mut s, "MainMenuBarRightEndCap"));
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
@@ -4310,8 +4410,8 @@ fn the_camera_following_style_dropdown_carries_the_engine_enum_and_plate() {
     assert!(s.errors().is_empty(), "script errors: {:?}", s.errors());
 }
 
-/// The **Action Bars page's five switches** (decision 1500) — the four bar toggles and the grid
-/// option, on ONE page over TWO different stores, which is the whole point of the test.
+/// The **Action Bars page's five native switches** (decision 1500) — the four bar toggles and the
+/// grid option, on ONE page over TWO different stores, which is the whole point of the test.
 ///
 /// The four bar rows are API (`func`) rows: there is nothing local to save, because the preference
 /// is four bits of this character's server-side `PLAYER_FIELD_BYTES` byte 2. A click writes the
@@ -4347,6 +4447,7 @@ fn the_action_bars_page_toggles_the_real_bars() {
         "RowMultiBar3",
         "RowMultiBar4",
         "RowAlwaysShowMultibars",
+        "RowHideEndCaps",
     ] {
         assert!(!checked(&mut s, row), "{row} ships unticked");
     }

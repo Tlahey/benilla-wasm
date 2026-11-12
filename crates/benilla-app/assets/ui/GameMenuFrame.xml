@@ -270,8 +270,8 @@
         <Frames>
             <!-- The era ladder plus the requested AddOns entry:
                  Options · Edit Mode · gap · Support, Macros, AddOns · gap · Logout, Exit Game ·
-                 gap · Return to Game. A TOPLEFT chain at the era layout engine's numbers — x 28,
-                 first top -32, 0 between group members, -20 at each section break. Live entries
+                 gap · Return to Game. Center the first rung so addons can resize the menu without
+                 shifting the ladder. First top -32, 0 between group members, -20 at each section break. Live entries
                  wire the era OnClick intent; Support stays greyed through GameMenuButton_Pending. -->
 
             <!-- Options — live: the era GameMenuFrame.lua l.88 entry (ShowUIPanel(SettingsPanel)
@@ -281,7 +281,7 @@
                  without relying on the eviction path. -->
             <Button name="GameMenuButtonOptions" inherits="GameMenuButtonTemplate">
                 <Anchors>
-                    <Anchor point="TOPLEFT"><Offset><AbsDimension x="28" y="-32"/></Offset></Anchor>
+                    <Anchor point="TOP"><Offset><AbsDimension x="0" y="-32"/></Offset></Anchor>
                 </Anchors>
                 <Scripts>
                     <OnLoad>self:SetText(GameMenuText("Options"))</OnLoad>
@@ -370,6 +370,7 @@
                     <Anchor point="TOPLEFT" relativeTo="GameMenuButtonLogout" relativePoint="BOTTOMLEFT"><Offset><AbsDimension x="0" y="0"/></Offset></Anchor>
                 </Anchors>
                 <Scripts>
+                    <OnLoad>self:SetText(GameMenuText("Exit Game"))</OnLoad>
                     <OnShow>
                         if not StaticPopup_Visible("CAMP") and not StaticPopup_Visible("QUIT") then
                             self:Enable()

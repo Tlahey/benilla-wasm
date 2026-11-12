@@ -225,6 +225,13 @@ fn next_pow2(n: i64) -> i64 {
     p
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+struct PlayerProjections {
+    world: Option<(f32, f32)>,
+    continents: Vec<Vec<Option<(f32, f32)>>>,
+    direct: Vec<(u32, Option<(f32, f32)>)>,
+}
+
 /// The engine-side world-map state: the pushed catalog + feed, and the engine-owned selection.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WorldMapState {
@@ -266,6 +273,7 @@ pub struct WorldMapState {
     /// `GetPlayerMapPosition("player")` for the CURRENT selection — projected app-side each frame
     /// (`map_proj`), `None`/(0,0) = off this map (the reference hides the blip).
     pub player_uv: Option<(f32, f32)>,
+    player_projections: Option<PlayerProjections>,
     /// The world map's arrow frame and the battlefield minimap's — the two per-session
     /// singletons `CreateWorldMapArrowFrame`/`CreateMiniWorldMapArrowFrame` build, by wrapper id
     /// (`worldmap_arrow`, 1980). `None` until the first create.
@@ -549,6 +557,20 @@ impl super::UiScript {
         model.worldmap.raid_uv = raid_uv;
     }
 
+    /// Push player projections for every selection so map changes are visible to Lua immediately.
+    pub fn set_world_map_player_projections(
+        &mut self,
+        world: Option<(f32, f32)>,
+        continents: Vec<Vec<Option<(f32, f32)>>>,
+        direct: Vec<(u32, Option<(f32, f32)>)>,
+    ) {
+        self.model_mut().worldmap.player_projections = Some(PlayerProjections {
+            world,
+            continents,
+            direct,
+        });
+    }
+
     /// The engine-owned selection — the app reads it each frame to project the feed for the
     /// displayed map. **All three of the reference's cells**, in its own order: the continent and
     /// zone pair (`0` = whole), then the direct-area row id
@@ -801,7 +823,26 @@ pub(super) fn install(lua: &mut Vm) -> benilla_lua::Result<()> {
                 .and_then(|n| list.get(n - 1).copied().flatten())
         };
         let (x, y) = match unit.as_str() {
-            "player" => model.worldmap.player_uv,
+            "player" => {
+                let wm = &model.worldmap;
+                match &wm.player_projections {
+                    None => wm.player_uv,
+                    Some(projections) => match (wm.direct_area, wm.selection) {
+                        (Some(id), _) => projections
+                            .direct
+                            .iter()
+                            .find(|(area, _)| *area == id)
+                            .and_then(|(_, uv)| *uv),
+                        (None, (0, _)) => projections.world,
+                        (None, (c, z)) => projections
+                            .continents
+                            .get(c as usize - 1)
+                            .and_then(|zones| zones.get(z as usize))
+                            .copied()
+                            .flatten(),
+                    },
+                }
+            }
             u if u.starts_with("party") => slot("party", &model.worldmap.party_uv),
             u if u.starts_with("raid") => slot("raid", &model.worldmap.raid_uv),
             _ => None,

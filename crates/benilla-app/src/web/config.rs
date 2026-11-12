@@ -14,6 +14,12 @@ export function openLocalAddonsPage() {
     const openDialog = window.openLocalAddonsDialog;
     return typeof openDialog === 'function' && openDialog();
 }
+export function luaDiagnosticsEnabled() {
+    return new URLSearchParams(window.location.search).get('debugLua') === '1';
+}
+export function returnToLogin() {
+    window.location.reload();
+}
 "#)]
 extern "C" {
     #[wasm_bindgen(js_name = hideBootstrapStatus)]
@@ -22,6 +28,10 @@ extern "C" {
     pub(crate) fn open_accounts_page(url: &str) -> bool;
     #[wasm_bindgen(js_name = openLocalAddonsPage)]
     pub(crate) fn open_local_addons_page() -> bool;
+    #[wasm_bindgen(js_name = luaDiagnosticsEnabled)]
+    pub(crate) fn lua_diagnostics_enabled() -> bool;
+    #[wasm_bindgen(js_name = returnToLogin)]
+    pub(crate) fn return_to_login();
 }
 
 pub(crate) fn active_locale() -> String {

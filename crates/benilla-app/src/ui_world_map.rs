@@ -945,6 +945,39 @@ fn feed_world_map(
         party_uv,
         raid_uv,
     );
+    let player_projections = data
+        .continents
+        .iter()
+        .enumerate()
+        .map(|(index, cont)| {
+            (0..=cont.zones.len())
+                .map(|zone| {
+                    project_on_displayed(
+                        &data,
+                        (index as u32 + 1, zone as u32, None),
+                        map.0,
+                        wx,
+                        wy,
+                    )
+                })
+                .collect()
+        })
+        .collect();
+    let direct_projections = data
+        .direct
+        .iter()
+        .map(|area| {
+            (
+                area.id,
+                project_on_displayed(&data, (0, 0, Some(area.id)), map.0, wx, wy),
+            )
+        })
+        .collect();
+    script.set_world_map_player_projections(
+        project_on_displayed(&data, (0, 0, None), map.0, wx, wy),
+        player_projections,
+        direct_projections,
+    );
     // The orphan leg of the same resolver answer, beside the pair: `SetMapToCurrentZone` reads
     // both back, and the stock battlefield minimap calls it itself on `PLAYER_ENTERING_WORLD`
     // while it is shown — the call that lands a player zoning into a battleground on the

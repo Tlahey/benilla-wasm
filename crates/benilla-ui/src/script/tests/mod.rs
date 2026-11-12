@@ -98,6 +98,66 @@ fn an_instruction_budget_turns_a_runaway_loop_into_an_error() {
     assert_eq!(t.eval::<i64>("return BudgetOk").unwrap(), 500_500);
 }
 
+#[test]
+fn diagnostic_tick_reports_runaway_source_and_leaves_the_vm_unhooked() {
+    let mut s = crate::script::UiScript::new().unwrap();
+    s.run_chunk_named(
+        br#"
+        Runaway = CreateFrame("Frame", "Runaway")
+        Runaway:SetScript("OnUpdate", function()
+            local i = 0
+            while true do i = i + 1 end
+        end)
+        "#,
+        "@Interface\\AddOns\\Runaway\\Runaway.lua",
+    )
+    .unwrap();
+
+    s.tick_with_instruction_budget(0.016, 1_000_000);
+    let errors = s.take_errors();
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("instruction budget exhausted")
+                && error.contains("Runaway.lua")),
+        "{errors:?}"
+    );
+
+    s.run(
+        r#"
+        Runaway:SetScript("OnUpdate", nil)
+        local n = 0
+        for i = 1, 1000000 do n = n + 1 end
+        Recovered = n
+        "#,
+    )
+    .unwrap();
+    assert_eq!(s.eval::<i64>("return Recovered").unwrap(), 1_000_000);
+}
+
+#[test]
+fn diagnostic_tick_resets_the_instruction_budget_each_frame() {
+    let mut s = crate::script::UiScript::new().unwrap();
+    s.run(
+        r#"
+        Updates = 0
+        local frame = CreateFrame("Frame", "FiniteUpdate")
+        frame:SetScript("OnUpdate", function()
+            local n = 0
+            for i = 1, 100000 do n = n + 1 end
+            Updates = Updates + 1
+        end)
+        "#,
+    )
+    .unwrap();
+
+    for _ in 0..10 {
+        s.tick_with_instruction_budget(0.016, 1_000_000);
+    }
+    assert!(s.errors().is_empty(), "{:?}", s.errors());
+    assert_eq!(s.eval::<i64>("return Updates").unwrap(), 10);
+}
+
 /// **`GetBindLocation()` — the hearth location's name, `""` before the packet lands.**
 ///
 /// Three corpus addons read it (FuBar_TransporterFu `TransporterFu.lua:456`, Necrosis

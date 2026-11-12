@@ -130,6 +130,13 @@ impl super::UiScript {
         }
     }
 
+    /// Diagnostic-only tick: report runaway Lua handlers and disarm the hook before returning.
+    pub fn tick_with_instruction_budget(&mut self, elapsed: f32, budget: u64) {
+        self.set_instruction_budget(budget);
+        self.tick(elapsed);
+        self.clear_instruction_budget();
+    }
+
     pub fn tick(&mut self, elapsed: f32) {
         self.clock += f64::from(elapsed);
         if let Err(e) = self.lua.set_global("__benilla_now", self.clock) {

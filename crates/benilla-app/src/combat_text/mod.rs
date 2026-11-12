@@ -57,7 +57,7 @@
 //! **constant with unit distance** (the depth counter-scale exists only in the *nameplate* path)
 //! and composes as `px = round_half_away(v × √(W²+H²))` — `v` the category's interpolated scale
 //! value, the diagonal the gx screencoord unit (`0x832a44/48` hold the live aspect basis; the
-//! first reading hardcoded its 4:3 value 0.6 — see [`text_px`]), the round being the gx
+//! first reading hardcoded its 4:3 value 0.6 — see [`law::text_px`]), the round being the gx
 //! `ScreenToPixelHeight` law (`0x5c6fa0`, wow-re `crates/font/src/screen_pixel.rs`, bit-exact
 //! difftested). At 1024×768 (diag 1280): normal number 23 px, crit settles 35 px, pop peaks ~70 px.
 //! The font is **whatever the Lua global `DAMAGE_TEXT_FONT` holds** when `0x6c8470` reads it —
@@ -125,7 +125,7 @@ mod law;
 #[cfg(test)]
 pub(crate) use law::COLOR_SPELL_GOLD;
 use law::{
-    argb, claimed_box_px, fade_alpha, melee_text, scale_value, shadow_offset_px, text_px,
+    argb, claimed_box_px, fade_alpha, melee_text, scale_value, shadow_offset_px,
     CATEGORIES,
 };
 pub(crate) use law::{
@@ -259,6 +259,8 @@ pub(crate) fn float_combat_text(
     // test world, where the fallback face is what the reference's stock `Fonts.xml` names anyway.
     font: Option<Res<DamageTextFont>>,
     mut script: Option<NonSendMut<benilla_ui::script::UiScript>>,
+    // Floating combat text is outside UIParent, so carry the global UI scale explicitly.
+    ui_scale: Option<Res<crate::ui_script::UiScaleCvar>>,
 ) {
     let now = time.elapsed_secs_f64();
     // Headless (captures/tests) the camera is None — spawns/expiry still run, nothing draws.
@@ -267,6 +269,7 @@ pub(crate) fn float_combat_text(
         .ok()
         .map(|(c, pose)| (c, GlobalTransform::from(*pose)));
     let viewport = cam.as_ref().and_then(|(c, _)| c.logical_viewport_size());
+    let ui_scale = ui_scale.as_deref().map_or(1.0, |s| s.0);
     for spawn in spawns.read() {
         let body = if let Some(key) = law::outcome_key(&spawn.text) {
             let Some(word) = script
@@ -371,7 +374,7 @@ pub(crate) fn float_combat_text(
         };
         // The size law: constant with distance (no depth term anywhere in the worldtext path).
         let size_value = scale_value(t.category, life);
-        let target_px = text_px(size_value, viewport);
+        let target_px = law::scaled_text_px(size_value, viewport, ui_scale);
         // Laid out AT the target size. The crit pop animates through a continuum of sizes, which
         // under the old fixed ladder meant shaping at the nearest rung and rescaling every quad
         // about the anchor — a resampled bitmap for the whole animation. Now the pop steps through
@@ -425,7 +428,7 @@ pub(crate) fn float_combat_text(
             // the solver sees runs 1/G48 (~1.667×) taller and 1/G44 (~1.25×) wider than the
             // rendered glyphs, the reference's generous size-proportional padding
             // ([`claimed_box_px`], wow-re `worldtext-measured-block-wh-law.md`).
-            let claim = claimed_box_px(b.width(), size_value, viewport);
+            let claim = claimed_box_px(b.width(), size_value, viewport, ui_scale);
             let (hw, hh) = (claim.x * 0.5, claim.y * 0.5);
             let cx = screen
                 .x
@@ -452,7 +455,7 @@ pub(crate) fn float_combat_text(
         // FIRST so the stable z-sort keeps it behind the fill at the shared Z_WORLD_TEXT key —
         // the client's shadow-before-main double-walk (`0x5c8710`).
         if alpha_shadow > 0 {
-            let off = shadow_offset_px(viewport);
+            let off = shadow_offset_px(viewport) * ui_scale;
             quads.overlays.extend(glyphs.iter().map(|q| {
                 let mut s = q.clone();
                 s.rect = Rect {

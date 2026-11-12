@@ -389,6 +389,39 @@ fn worldmap_current_zone_and_player_feed() {
     assert_eq!(s.eval::<i64>("return GetCurrentMapContinent()").unwrap(), 0);
 }
 
+#[test]
+fn player_position_follows_map_selection_without_waiting_for_a_frame() {
+    let mut s = script();
+    push_catalog(&mut s);
+    s.set_world_map_player_direct_area(Some(77));
+    s.set_world_map_player_projections(
+        Some((0.2, 0.3)),
+        vec![
+            vec![Some((0.4, 0.5)), Some((0.6, 0.7)), None],
+            vec![None, None, None],
+        ],
+        vec![(77, Some((0.8, 0.9)))],
+    );
+    let position = |s: &mut UiScript| {
+        s.eval::<(f64, f64)>(r#"return GetPlayerMapPosition("player")"#)
+            .unwrap()
+    };
+    s.run("SetMapZoom(1, 1)").unwrap();
+    let (x, y) = position(&mut s);
+    assert!((x - 0.6).abs() < 1e-6 && (y - 0.7).abs() < 1e-6);
+    s.run("SetMapZoom(1)").unwrap();
+    let (x, y) = position(&mut s);
+    assert!((x - 0.4).abs() < 1e-6 && (y - 0.5).abs() < 1e-6);
+    s.run("SetMapZoom(1, 2)").unwrap();
+    assert_eq!(position(&mut s), (0.0, 0.0));
+    s.run("SetMapZoom(0)").unwrap();
+    let (x, y) = position(&mut s);
+    assert!((x - 0.2).abs() < 1e-6 && (y - 0.3).abs() < 1e-6);
+    s.run("SetMapToCurrentZone()").unwrap();
+    let (x, y) = position(&mut s);
+    assert!((x - 0.8).abs() < 1e-6 && (y - 0.9).abs() < 1e-6);
+}
+
 /// The **engine** moves the selection too, with no Lua in the loop — the reference's second
 /// writer of `[0x84506c]`/`[0x845070]`: `0x494780`'s `old == 0` side call to the resolver
 /// `0x4a6650`, which every exit of ends in the `SetMap` setter `0x4a67a0` (wow-re
