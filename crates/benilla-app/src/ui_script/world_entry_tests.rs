@@ -1027,7 +1027,7 @@ fn an_addon_that_fails_to_load_without_raising_is_readable_in_the_error_log() {
     // carries warnings now (2135), which a world entry produces before any addon is reached, so
     // asserting an index would be asserting how many warnings the stock UI happens to raise.
     // What this pins is the row TEXT, which is the window's own trim path over a real message.
-    let row_labels: Vec<String> = (1..=13)
+    let row_labels: Vec<String> = (1..=11)
         .filter_map(|i| {
             script
                 .eval::<Option<String>>(&format!("return BenillaScriptLogRow{i}Label:GetText()"))
@@ -1046,6 +1046,41 @@ fn an_addon_that_fails_to_load_without_raising_is_readable_in_the_error_log() {
         summary.contains("problem"),
         "the summary line counted them: {summary:?}"
     );
+
+    let copied = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let captured = copied.clone();
+    script.set_diagnostic_copy_opener(Box::new(move |text| {
+        *captured.lock().unwrap() = text.to_string();
+        true
+    }));
+    script.run("BenillaScriptLog_Copy()").expect("copy log");
+    let report = copied.lock().unwrap();
+    assert!(report.contains("AaMissing") && report.contains("not found"));
+    assert!(
+        report.contains("[load]"),
+        "the exported log preserves the kind"
+    );
+    drop(report);
+
+    script.set_screen_size(1600.0, 900.0);
+    script.run("BenillaScriptLog_Toggle()").expect("open log");
+    script.resolve();
+    let (frame_bottom, detail_bottom, clear_bottom, copy_bottom, close_bottom): (
+        f32,
+        f32,
+        f32,
+        f32,
+        f32,
+    ) = script
+        .eval(
+            "return BenillaScriptLogFrame:GetBottom(), BenillaScriptLogDetailScroll:GetBottom(), \
+         BenillaScriptLogClearButton:GetBottom(), BenillaScriptLogCopyButton:GetBottom(), \
+         BenillaScriptLogCloseBottomButton:GetBottom()",
+        )
+        .expect("resolved log layout");
+    for bottom in [clear_bottom, copy_bottom, close_bottom] {
+        assert!(bottom >= frame_bottom + 115.0 && bottom < detail_bottom);
+    }
 
     // 3 · **this class deliberately does NOT seize the screen.** Nothing raised; the reference's
     // answer to an unparseable/absent document is a log line and silence, and 1495 keeps that.

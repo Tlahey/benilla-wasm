@@ -75,6 +75,8 @@ fn install_boot_vm(world: &mut World) {
     }
     #[cfg(target_arch = "wasm32")]
     script.set_local_addons_opener(Box::new(|| crate::web_config::open_local_addons_page()));
+    #[cfg(target_arch = "wasm32")]
+    script.set_diagnostic_copy_opener(Box::new(crate::web_config::open_diagnostic_copy));
     seed_vm_clock(world, &mut script);
     if let Some(catalog) = world.get_resource::<crate::ui_chat::DamageSchools>() {
         script.set_damage_school_names(&catalog.0.names);

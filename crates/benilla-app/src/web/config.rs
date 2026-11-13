@@ -14,6 +14,10 @@ export function openLocalAddonsPage() {
     const openDialog = window.openLocalAddonsDialog;
     return typeof openDialog === 'function' && openDialog();
 }
+export function openDiagnosticCopy(text) {
+    const openDialog = window.openDiagnosticCopyDialog;
+    return typeof openDialog === 'function' && openDialog(text);
+}
 export function luaDiagnosticsEnabled() {
     return new URLSearchParams(window.location.search).get('debugLua') === '1';
 }
@@ -28,6 +32,8 @@ extern "C" {
     pub(crate) fn open_accounts_page(url: &str) -> bool;
     #[wasm_bindgen(js_name = openLocalAddonsPage)]
     pub(crate) fn open_local_addons_page() -> bool;
+    #[wasm_bindgen(js_name = openDiagnosticCopy)]
+    pub(crate) fn open_diagnostic_copy(text: &str) -> bool;
     #[wasm_bindgen(js_name = luaDiagnosticsEnabled)]
     pub(crate) fn lua_diagnostics_enabled() -> bool;
     #[wasm_bindgen(js_name = returnToLogin)]

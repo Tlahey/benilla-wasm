@@ -843,6 +843,39 @@ fn set_font_is_one_routine_on_both_tables() {
     }
 }
 
+#[test]
+fn set_font_accepts_optional_non_string_flags() {
+    let mut s = script();
+    s.run(
+        "frame = CreateFrame('Frame')\n\
+           fs = frame:CreateFontString()\n\
+           fo = CreateFont('OptionalFlagsFont')\n\
+           edit = CreateFrame('EditBox')\n\
+           button = CreateFrame('Button')",
+    )
+    .unwrap();
+
+    for obj in ["fs", "fo", "edit", "button"] {
+        for flags in ["", ", nil", ", false", ", 'OUTLINE'"] {
+            s.run(&format!(
+                "{obj}:SetFont('Fonts\\\\FRIZQT__.TTF', 12{flags})"
+            ))
+            .unwrap_or_else(|err| panic!("{obj}:SetFont with {flags:?}: {err}"));
+        }
+        assert!(
+            s.eval::<bool>(&format!(
+                "local path, height, flags = {obj}:GetFont() return flags == 'OUTLINE'"
+            ))
+            .unwrap(),
+            "{obj}:SetFont must still apply string flags"
+        );
+        assert!(
+            s.run(&format!("{obj}:SetFont(nil, 12, false)")).is_err(),
+            "{obj}:SetFont must still reject an invalid path"
+        );
+    }
+}
+
 /// A cross-axis token **erases** its axis, and the two readers then disagree — faithfully.
 ///
 /// `SetJustifyH("TOP")` parses (`0x08`), contributes nothing to mask `0x07`, and raises nothing.

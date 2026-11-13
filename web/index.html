@@ -50,6 +50,25 @@
         display: block;
         background: #0b0d12;
       }
+      #benilla-diagnostic-dialog {
+        width: min(720px, calc(100vw - 48px));
+        max-height: calc(100dvh - 48px);
+        border: 1px solid #9a7a3a;
+        border-radius: 8px;
+        background: #0b0d12;
+        color: #ffd778;
+        font: 16px "Trebuchet MS", Verdana, sans-serif;
+      }
+      #benilla-diagnostic-dialog::backdrop { background: #000b; }
+      #benilla-diagnostic-text {
+        box-sizing: border-box;
+        width: 100%;
+        height: min(50dvh, 360px);
+        color: #eee;
+        background: #17191f;
+        font: 13px monospace;
+      }
+      #benilla-diagnostic-dialog button { margin: 8px 8px 0 0; cursor: pointer; }
       @media (max-width: 600px) {
         #benilla-local-addons-dialog {
           width: calc(100vw - 16px);
@@ -67,6 +86,15 @@
         <button id="benilla-local-addons-close" type="button"></button>
       </header>
       <iframe id="benilla-local-addons-frame" title=""></iframe>
+    </dialog>
+    <dialog id="benilla-diagnostic-dialog" aria-labelledby="benilla-diagnostic-title">
+      <h2 id="benilla-diagnostic-title"></h2>
+      <p id="benilla-diagnostic-status" role="status"></p>
+      <textarea id="benilla-diagnostic-text" readonly></textarea>
+      <div>
+        <button id="benilla-diagnostic-copy" type="button"></button>
+        <button id="benilla-diagnostic-close" type="button"></button>
+      </div>
     </dialog>
     <script>
       const addonsDialog = document.getElementById('benilla-local-addons-dialog');
@@ -87,6 +115,34 @@
       addonsDialog.addEventListener('click', event => {
         if (event.target === addonsDialog) addonsDialog.close();
       });
+      const diagnosticDialog = document.getElementById('benilla-diagnostic-dialog');
+      const diagnosticText = document.getElementById('benilla-diagnostic-text');
+      const diagnosticStatus = document.getElementById('benilla-diagnostic-status');
+      globalThis.openDiagnosticCopyDialog = text => {
+        if (typeof diagnosticDialog.showModal !== 'function') return false;
+        const t = key => globalThis.BENILLA_I18N.text(key);
+        document.getElementById('benilla-diagnostic-title').textContent = t('diagnostics.title');
+        document.getElementById('benilla-diagnostic-copy').textContent = t('diagnostics.copy');
+        document.getElementById('benilla-diagnostic-close').textContent = t('addons.close');
+        diagnosticStatus.textContent = t('diagnostics.manual_copy');
+        diagnosticText.value = text;
+        if (!diagnosticDialog.open) diagnosticDialog.showModal();
+        diagnosticText.focus();
+        diagnosticText.select();
+        return true;
+      };
+      document.getElementById('benilla-diagnostic-copy').addEventListener('click', async () => {
+        try {
+          if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('clipboard unavailable');
+          await navigator.clipboard.writeText(diagnosticText.value);
+          diagnosticStatus.textContent = globalThis.BENILLA_I18N.text('diagnostics.copied');
+        } catch {
+          diagnosticStatus.textContent = globalThis.BENILLA_I18N.text('diagnostics.manual_copy');
+          diagnosticText.focus();
+          diagnosticText.select();
+        }
+      });
+      document.getElementById('benilla-diagnostic-close').addEventListener('click', () => diagnosticDialog.close());
     </script>
     <script src="./config.js"></script>
     <script src="./i18n.js"></script>

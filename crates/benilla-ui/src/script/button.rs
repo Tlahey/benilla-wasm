@@ -934,7 +934,7 @@ pub(super) fn install(vm: &mut Vm) -> benilla_lua::Result<()> {
     // takes a numeric string — so the leniency is transcribed rather than tightened.
     let set_font = vm.create_function(
         "SetFont",
-        |lua, (this, file, height, flags): (LuaTable, LuaValue, LuaValue, Option<String>)| {
+        |lua, (this, file, height, flags): (LuaTable, LuaValue, LuaValue, LuaValue)| {
             let usage = || {
                 benilla_lua::Error::runtime(
                     "Usage: <Button>:SetFont(\"font\", fontHeight [, flags])".to_string(),
@@ -954,6 +954,7 @@ pub(super) fn install(vm: &mut Vm) -> benilla_lua::Result<()> {
                     .ok_or_else(usage)?,
                 _ => return Err(usage()),
             };
+            let flags = super::binding_abi::neutral_optional_string(&flags);
             let flags = super::Outline::flags(flags.as_deref().unwrap_or(""))
                 .as_str()
                 .to_string();

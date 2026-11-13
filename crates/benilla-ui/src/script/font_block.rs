@@ -289,8 +289,9 @@ fn install_callbacks(
 
     let set_font = vm.create_function(
         "FontBlock:SetFont",
-        move |lua, (this, file, height, flags): (LuaTable, LuaValue, LuaValue, Option<String>)| {
+        move |lua, (this, file, height, flags): (LuaTable, LuaValue, LuaValue, LuaValue)| {
             let (path, height) = set_font_args_context(&file, &height, widget)?;
+            let flags = super::binding_abi::neutral_optional_string(&flags);
             let rh = resolve(lua, &this)?;
             let mut model = lua.app_data_mut::<Model>().expect("model");
             let loaded =

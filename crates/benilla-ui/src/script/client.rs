@@ -111,6 +111,14 @@ pub(super) fn install(lua: &mut Vm) -> benilla_lua::Result<()> {
         })
     })?;
 
+    lua.register_function("BenillaOpenDiagnosticCopy", |lua, text: String| {
+        let model = lua.app_data_ref::<Model>().expect("model app_data");
+        Ok(model
+            .diagnostic_copy_opener
+            .as_ref()
+            .is_some_and(|open| open(&text)))
+    })?;
+
     // The host opens the same full AddOn List used at character select.
     lua.register_function("OpenAddonsList", |lua, ()| {
         let model = lua.app_data_ref::<Model>().expect("model app_data");
@@ -380,6 +388,10 @@ impl super::UiScript {
         self.model_mut().local_addons_opener = Some(opener);
     }
 
+    pub fn set_diagnostic_copy_opener(&mut self, opener: Box<dyn Fn(&str) -> bool + Send + Sync>) {
+        self.model_mut().diagnostic_copy_opener = Some(opener);
+    }
+
     /// Install the host callback that opens the full AddOn List from the in-game Options page.
     pub fn set_addons_list_opener(&mut self, opener: Box<dyn Fn() -> bool + Send + Sync>) {
         self.model_mut().addons_list_opener = Some(opener);
@@ -528,7 +540,10 @@ mod tests {
         s.run("SetEuropeanNumbers(false)").unwrap();
         assert!(!s.model_ref().european_numbers.get());
         s.run("SetEuropeanNumbers(nil)").unwrap();
-        assert!(!s.model_ref().european_numbers.get(), "nil is false, not absent");
+        assert!(
+            !s.model_ref().european_numbers.get(),
+            "nil is false, not absent"
+        );
         s.run("SetEuropeanNumbers()").unwrap();
         assert!(
             s.model_ref().european_numbers.get(),

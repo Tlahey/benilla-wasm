@@ -375,22 +375,21 @@ fn insert(map: &mut HashMap<String, Command>, alias: &str, cmd: Command) {
     }
 }
 
-/// Build the table once the VM (its globals) and the emote catalog both exist. `PostStartup` rather
-/// than an ordering constraint: both producers are `Startup` systems whose `insert_resource` lands
-/// at the schedule boundary, so this needs no fragile `.after()` chain into two other modules.
+/// Build the table at startup, even if the VM or emote catalog is not available yet. In the
+/// browser the catalog arrives asynchronously, but benilla's own aliases must work immediately.
 pub(crate) fn build_slash_commands(
     mut commands: Commands,
-    script: Option<NonSendMut<benilla_ui::script::UiScript>>,
+    mut script: Option<NonSendMut<benilla_ui::script::UiScript>>,
     emotes: Option<Res<crate::sound::EmoteSounds>>,
 ) {
-    let (Some(mut script), Some(emotes)) = (script, emotes) else {
-        warn!("chat: no UI VM or emote catalog — the slash-command table is EMPTY");
-        commands.insert_resource(SlashCommands::default());
-        return;
-    };
     let table = SlashCommands::build(
-        |name| script.global_string(name).filter(|s| !s.is_empty()),
-        |token| emotes.text_id(token),
+        |name| {
+            script
+                .as_deref_mut()
+                .and_then(|script| script.global_string(name))
+                .filter(|s| !s.is_empty())
+        },
+        |token| emotes.as_deref().and_then(|emotes| emotes.text_id(token)),
     );
     let (slash, emote, added, dev) = table.counts();
     // The "it loaded" signal: the shipped 1.12 data yields the pinned alias counts (see
@@ -399,8 +398,56 @@ pub(crate) fn build_slash_commands(
         "chat: slash table — {slash} command aliases, {emote} emote aliases, \
          {added} benilla additions, {dev} instrument aliases"
     );
-    if emote == 0 {
+    if emote == 0 && script.is_some() && emotes.is_some() {
         error!("chat: NO emote aliases — every /wave-style command is dead (GlobalStrings?)");
     }
     commands.insert_resource(table);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn player_commands_exist_without_the_late_emote_catalog() {
+        let mut app = App::new();
+        app.insert_non_send_resource(benilla_ui::script::UiScript::new().unwrap());
+        app.add_systems(Update, build_slash_commands);
+        app.update();
+
+        let table = app.world().resource::<SlashCommands>();
+        assert_eq!(
+            table.lookup("reload"),
+            Some(Command::Slash(SlashIndex::ReloadUi))
+        );
+        assert_eq!(
+            table.lookup("errors"),
+            Some(Command::Slash(SlashIndex::ScriptErrors))
+        );
+        assert_eq!(
+            table.lookup("err"),
+            Some(Command::Slash(SlashIndex::ScriptErrors))
+        );
+        assert_eq!(
+            table.lookup("convertraid"),
+            Some(Command::Slash(SlashIndex::ConvertRaid))
+        );
+    }
+
+    #[test]
+    fn player_commands_exist_without_a_ui_vm() {
+        let mut app = App::new();
+        app.add_systems(Update, build_slash_commands);
+        app.update();
+
+        let table = app.world().resource::<SlashCommands>();
+        assert_eq!(
+            table.lookup("reload"),
+            Some(Command::Slash(SlashIndex::ReloadUi))
+        );
+        assert_eq!(
+            table.lookup("errors"),
+            Some(Command::Slash(SlashIndex::ScriptErrors))
+        );
+    }
 }

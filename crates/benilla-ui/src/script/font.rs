@@ -350,8 +350,9 @@ pub(super) fn install(lua: &mut Vm) -> benilla_lua::Result<()> {
 
     let set_font = lua.create_function(
         "Font:SetFont",
-        |lua, (this, file, height, flags): (LuaTable, LuaValue, LuaValue, Option<String>)| {
+        |lua, (this, file, height, flags): (LuaTable, LuaValue, LuaValue, LuaValue)| {
             let (path, height) = super::font_block::set_font_args_context(&file, &height, "Font")?;
+            let flags = super::binding_abi::neutral_optional_string(&flags);
             let ok = !path.is_empty();
             edit_context(lua, &this, |font| {
                 if ok {
